@@ -19,6 +19,7 @@ path = "src/bin/ambard.rs"
 [dependencies]
 ambar-automation = { path = "../ambar-automation" }
 ambar-service = { path = "../ambar-service" }
+ambar-ai = { path = "../ambar-ai" }
 humantime.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
@@ -30,6 +31,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+wiremock.workspace = true
 
 [lints]
 workspace = true

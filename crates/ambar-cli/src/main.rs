@@ -1,5 +1,6 @@
 //! `ambar` — command-line front end for the Ambar automation engine.
 
+mod ai_cmds;
 mod service_cmds;
 
 use std::io::{self, BufRead, IsTerminal, Write};
@@ -85,6 +86,9 @@ enum Command {
     /// Manage workflows in the running ambard service.
     #[command(subcommand)]
     Workflow(service_cmds::WorkflowCmd),
+    /// Build automations from plain-language descriptions.
+    #[command(subcommand)]
+    Ai(ai_cmds::AiCmd),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -369,6 +373,10 @@ async fn main() -> Result<()> {
         }
         Command::Workflow(cmd) => {
             let code = service_cmds::workflow(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Ai(cmd) => {
+            let code = ai_cmds::ai(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
             std::process::exit(code);
         }
         Command::Revoke { workflow } => {
