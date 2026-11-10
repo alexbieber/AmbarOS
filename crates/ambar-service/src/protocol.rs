@@ -81,6 +81,85 @@ pub enum Request {
     },
     /// Shut the service down gracefully.
     Shutdown,
+
+    // ---- identity & agents (Phase 6) ----
+    /// Who am I authenticated as, and with which scopes.
+    WhoAmI,
+    /// Recent executions.
+    History {
+        /// Only this workflow.
+        #[serde(default)]
+        workflow: Option<String>,
+        /// Max records (capped at 1000).
+        #[serde(default = "default_limit")]
+        limit: usize,
+    },
+    /// Agent: submit a workflow for the owner's approval.
+    Propose {
+        /// Workflow TOML.
+        definition: String,
+        /// Why the agent wants it.
+        #[serde(default)]
+        reason: String,
+    },
+    /// Proposals (all for the owner, own for an agent).
+    ProposalList,
+    /// Owner: approve a pending proposal (registers + grants, optionally enables).
+    ProposalApprove {
+        /// Proposal id.
+        id: String,
+        /// Pre-approve sensitive actions.
+        #[serde(default)]
+        allow_sensitive: bool,
+        /// Enable right away.
+        #[serde(default)]
+        enable: bool,
+    },
+    /// Owner: reject a pending proposal.
+    ProposalReject {
+        /// Proposal id.
+        id: String,
+    },
+    /// Agent: read a memory value.
+    MemoryGet {
+        /// Key.
+        key: String,
+    },
+    /// Agent: write a memory value.
+    MemoryPut {
+        /// Key.
+        key: String,
+        /// Value (≤ 64 KiB).
+        value: String,
+    },
+    /// Agent: list memory keys.
+    MemoryList,
+    /// Agent: delete a memory value.
+    MemoryDelete {
+        /// Key.
+        key: String,
+    },
+    /// Owner: create an agent identity. The token is returned once.
+    AgentCreate {
+        /// Unique name.
+        name: String,
+        /// What it is for.
+        #[serde(default)]
+        description: String,
+        /// Scopes, e.g. `read`, `propose`, `memory`, `run:daily-log`, `control:*`.
+        scopes: Vec<String>,
+    },
+    /// Owner: list agents with activity counters.
+    AgentList,
+    /// Owner: revoke an agent (by id or name).
+    AgentRevoke {
+        /// Agent id or name.
+        id: String,
+    },
+}
+
+fn default_limit() -> usize {
+    50
 }
 
 impl Request {
@@ -99,6 +178,19 @@ impl Request {
             Request::RunNow { .. } => "run_now",
             Request::Revoke { .. } => "revoke",
             Request::Shutdown => "shutdown",
+            Request::WhoAmI => "whoami",
+            Request::History { .. } => "history",
+            Request::Propose { .. } => "propose",
+            Request::ProposalList => "proposal_list",
+            Request::ProposalApprove { .. } => "proposal_approve",
+            Request::ProposalReject { .. } => "proposal_reject",
+            Request::MemoryGet { .. } => "memory_get",
+            Request::MemoryPut { .. } => "memory_put",
+            Request::MemoryList => "memory_list",
+            Request::MemoryDelete { .. } => "memory_delete",
+            Request::AgentCreate { .. } => "agent_create",
+            Request::AgentList => "agent_list",
+            Request::AgentRevoke { .. } => "agent_revoke",
         }
     }
 
@@ -106,7 +198,15 @@ impl Request {
     pub fn is_control(&self) -> bool {
         !matches!(
             self,
-            Request::Hello { .. } | Request::Health | Request::ListWorkflows
+            Request::Hello { .. }
+                | Request::Health
+                | Request::ListWorkflows
+                | Request::WhoAmI
+                | Request::History { .. }
+                | Request::ProposalList
+                | Request::MemoryGet { .. }
+                | Request::MemoryList
+                | Request::AgentList
         )
     }
 }
@@ -126,6 +226,10 @@ pub struct GrantSpec {
 pub enum ErrorCode {
     /// Missing or wrong token, wrong user, or no `Hello`.
     Unauthenticated,
+    /// Authenticated, but this identity may not do that.
+    Forbidden,
+    /// Too many requests from this agent.
+    RateLimited,
     /// Malformed request.
     BadRequest,
     /// Unknown workflow.

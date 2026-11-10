@@ -7,9 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ambar_automation::template::expand_home;
-use ambar_automation::workflow::parse_schedule;
-use ambar_automation::{Action, Trigger, Workflow};
+use crate::template::expand_home;
+use crate::workflow::parse_schedule;
+use crate::{Action, Trigger, Workflow};
 use serde::Serialize;
 
 /// Severity.
@@ -143,7 +143,7 @@ pub fn review(wf: &Workflow) -> Vec<Risk> {
 
     match &wf.trigger {
         Trigger::Schedule { every, cron } => {
-            if let Ok(ambar_automation::workflow::Schedule::Every(d)) =
+            if let Ok(crate::workflow::Schedule::Every(d)) =
                 parse_schedule(every.as_deref(), cron.as_deref())
                 && d < Duration::from_secs(60)
             {

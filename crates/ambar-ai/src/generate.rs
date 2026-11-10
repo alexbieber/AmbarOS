@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::AiError;
 use crate::provider::{CompletionRequest, LlmProvider, Message};
-use crate::risk::{Risk, review};
+use ambar_automation::risk::{Risk, review};
 
 const FORMAT_SPEC: &str = include_str!("../../../docs/workflow-format.md");
 

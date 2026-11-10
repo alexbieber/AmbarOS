@@ -9,7 +9,8 @@
 pub mod config;
 pub mod generate;
 pub mod provider;
-pub mod risk;
+/// Risk review (lives in `ambar-automation`; re-exported for convenience).
+pub use ambar_automation::risk;
 
 pub use config::{AiConfig, ApiKey, ProviderKind};
 pub use generate::{Draft, GenerateOptions, SuggestContext, Suggestion, generate, suggest};

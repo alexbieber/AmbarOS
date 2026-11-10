@@ -8,6 +8,7 @@ use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
+use crate::agents::{Agent, Proposal};
 use crate::auth::read_token;
 use crate::paths::ServicePaths;
 use crate::protocol::{
@@ -186,5 +187,104 @@ impl Client {
     /// Asks the service to shut down.
     pub async fn shutdown(&mut self) -> Result<(), ClientError> {
         self.control(Request::Shutdown).await
+    }
+
+    // ---- identity & agents ----
+
+    /// Identity and scopes of this connection.
+    pub async fn whoami(&mut self) -> Result<serde_json::Value, ClientError> {
+        self.call(&Request::WhoAmI).await
+    }
+    /// Recent executions.
+    pub async fn history(
+        &mut self,
+        workflow: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<ExecutionRecord>, ClientError> {
+        self.call(&Request::History {
+            workflow: workflow.map(String::from),
+            limit,
+        })
+        .await
+    }
+    /// Agent: propose a workflow for approval.
+    pub async fn propose(
+        &mut self,
+        definition: &str,
+        reason: &str,
+    ) -> Result<Proposal, ClientError> {
+        self.call(&Request::Propose {
+            definition: definition.into(),
+            reason: reason.into(),
+        })
+        .await
+    }
+    /// Proposals visible to this identity.
+    pub async fn proposals(&mut self) -> Result<Vec<Proposal>, ClientError> {
+        self.call(&Request::ProposalList).await
+    }
+    /// Owner: approve a proposal.
+    pub async fn approve(
+        &mut self,
+        id: &str,
+        allow_sensitive: bool,
+        enable: bool,
+    ) -> Result<Proposal, ClientError> {
+        self.call(&Request::ProposalApprove {
+            id: id.into(),
+            allow_sensitive,
+            enable,
+        })
+        .await
+    }
+    /// Owner: reject a proposal.
+    pub async fn reject(&mut self, id: &str) -> Result<Proposal, ClientError> {
+        self.call(&Request::ProposalReject { id: id.into() }).await
+    }
+    /// Agent: read memory.
+    pub async fn memory_get(&mut self, key: &str) -> Result<Option<String>, ClientError> {
+        self.call(&Request::MemoryGet { key: key.into() }).await
+    }
+    /// Agent: write memory.
+    pub async fn memory_put(&mut self, key: &str, value: &str) -> Result<(), ClientError> {
+        self.control(Request::MemoryPut {
+            key: key.into(),
+            value: value.into(),
+        })
+        .await
+    }
+    /// Agent: list memory keys.
+    pub async fn memory_list(&mut self) -> Result<Vec<String>, ClientError> {
+        self.call(&Request::MemoryList).await
+    }
+    /// Owner: create an agent. Returns the agent and its one-time token.
+    pub async fn agent_create(
+        &mut self,
+        name: &str,
+        description: &str,
+        scopes: &[&str],
+    ) -> Result<(Agent, String), ClientError> {
+        let v: serde_json::Value = self
+            .call(&Request::AgentCreate {
+                name: name.into(),
+                description: description.into(),
+                scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            })
+            .await?;
+        let agent = serde_json::from_value(v["agent"].clone())
+            .map_err(|e| ClientError::Protocol(e.to_string()))?;
+        let token = v["token"]
+            .as_str()
+            .ok_or_else(|| ClientError::Protocol("missing token".into()))?
+            .to_string();
+        Ok((agent, token))
+    }
+    /// Owner: list agents.
+    pub async fn agent_list(&mut self) -> Result<Vec<Agent>, ClientError> {
+        self.call(&Request::AgentList).await
+    }
+    /// Owner: revoke an agent.
+    pub async fn agent_revoke(&mut self, id: &str) -> Result<Agent, ClientError> {
+        self.call(&Request::AgentRevoke { id: id.into() }).await
     }
 }

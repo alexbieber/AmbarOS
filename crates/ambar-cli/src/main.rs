@@ -1,5 +1,6 @@
 //! `ambar` — command-line front end for the Ambar automation engine.
 
+mod agent_cmds;
 mod ai_cmds;
 mod service_cmds;
 
@@ -89,6 +90,9 @@ enum Command {
     /// Build automations from plain-language descriptions.
     #[command(subcommand)]
     Ai(ai_cmds::AiCmd),
+    /// Manage agent identities and review their proposals.
+    #[command(subcommand)]
+    Agent(agent_cmds::AgentCmd),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -373,6 +377,10 @@ async fn main() -> Result<()> {
         }
         Command::Workflow(cmd) => {
             let code = service_cmds::workflow(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Agent(cmd) => {
+            let code = agent_cmds::agent(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
             std::process::exit(code);
         }
         Command::Ai(cmd) => {
