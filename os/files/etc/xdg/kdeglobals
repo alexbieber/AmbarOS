@@ -1,0 +1,9 @@
+[General]
+ColorScheme=AmbarLight
+AccentColor=179,92,5
+
+[KDE]
+LookAndFeelPackage=os.ambar.desktop
+
+[Icons]
+Theme=breeze

@@ -118,17 +118,22 @@ fn index_source(explicit: &Option<String>) -> Result<String> {
     if let Some(i) = explicit {
         return Ok(i.clone());
     }
+    // User config first, then the system default shipped by the OS image.
     let p = config_dir()?.join("marketplace.toml");
-    let cfg: MarketConfig = std::fs::read_to_string(&p)
-        .ok()
-        .and_then(|t| toml::from_str(&t).ok())
-        .unwrap_or_default();
-    cfg.index.with_context(|| {
-        format!(
-            "no marketplace configured: pass --index or set `index = \"…\"` in {}",
-            p.display()
-        )
-    })
+    let read = |path: &Path| -> Option<String> {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|t| toml::from_str::<MarketConfig>(&t).ok())
+            .and_then(|c| c.index)
+    };
+    read(&p)
+        .or_else(|| read(Path::new("/etc/xdg/ambar/marketplace.toml")))
+        .with_context(|| {
+            format!(
+                "no marketplace configured: pass --index or set `index = \"…\"` in {}",
+                p.display()
+            )
+        })
 }
 
 async fn fetch(src: &str) -> Result<Vec<u8>> {

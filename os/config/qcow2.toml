@@ -1,0 +1,7 @@
+# bootc-image-builder config for TEST disk images only.
+# Creates user "ambar" / password "ambar" so the QEMU smoke test can log in.
+# Never use this config for images you give to people.
+[[customizations.user]]
+name = "ambar"
+password = "ambar"
+groups = ["wheel"]
