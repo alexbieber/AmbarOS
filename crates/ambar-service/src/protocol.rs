@@ -79,6 +79,11 @@ pub enum Request {
         /// Workflow id.
         id: String,
     },
+    /// Remove a workflow (definition and grant; history is kept).
+    Remove {
+        /// Workflow id.
+        id: String,
+    },
     /// Shut the service down gracefully.
     Shutdown,
 
@@ -177,6 +182,7 @@ impl Request {
             Request::Cancel { .. } => "cancel",
             Request::RunNow { .. } => "run_now",
             Request::Revoke { .. } => "revoke",
+            Request::Remove { .. } => "remove",
             Request::Shutdown => "shutdown",
             Request::WhoAmI => "whoami",
             Request::History { .. } => "history",

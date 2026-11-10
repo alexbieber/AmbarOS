@@ -176,6 +176,10 @@ impl Client {
     pub async fn cancel(&mut self, id: &str) -> Result<(), ClientError> {
         self.control(Request::Cancel { id: id.into() }).await
     }
+    /// Removes a workflow (owner only).
+    pub async fn remove(&mut self, id: &str) -> Result<(), ClientError> {
+        self.control(Request::Remove { id: id.into() }).await
+    }
     /// Withdraws a grant.
     pub async fn revoke(&mut self, id: &str) -> Result<(), ClientError> {
         self.control(Request::Revoke { id: id.into() }).await

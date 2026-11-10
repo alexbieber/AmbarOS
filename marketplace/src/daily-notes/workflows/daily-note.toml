@@ -1,0 +1,21 @@
+id = "daily-note"
+name = "Daily note"
+
+[trigger]
+type = "schedule"
+cron = "30 8 * * 1-5"
+
+[[actions]]
+type = "write_file"
+path = "~/Documents/Notes/{date}.md"
+content = "# {date}\n\n## Today\n- \n\n## Notes\n"
+append = true
+
+[[actions]]
+type = "notify"
+title = "Today's note is ready"
+body = "Documents/Notes/{date}.md"
+
+[permissions]
+write = ["~/Documents/Notes"]
+notify = true

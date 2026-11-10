@@ -2,6 +2,7 @@
 
 mod agent_cmds;
 mod ai_cmds;
+mod pkg_cmds;
 mod service_cmds;
 
 use std::io::{self, BufRead, IsTerminal, Write};
@@ -93,6 +94,9 @@ enum Command {
     /// Manage agent identities and review their proposals.
     #[command(subcommand)]
     Agent(agent_cmds::AgentCmd),
+    /// Build, sign, share and install workflow packages.
+    #[command(subcommand)]
+    Pkg(pkg_cmds::PkgCmd),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -377,6 +381,10 @@ async fn main() -> Result<()> {
         }
         Command::Workflow(cmd) => {
             let code = service_cmds::workflow(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Pkg(cmd) => {
+            let code = pkg_cmds::pkg(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
             std::process::exit(code);
         }
         Command::Agent(cmd) => {

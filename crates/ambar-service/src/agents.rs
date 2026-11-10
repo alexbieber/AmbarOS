@@ -221,6 +221,7 @@ pub fn authorize(principal: &Principal, request: &Request) -> Result<(), String>
         Request::Register { .. }
         | Request::Enable { .. }
         | Request::Revoke { .. }
+        | Request::Remove { .. }
         | Request::Shutdown
         | Request::AgentCreate { .. }
         | Request::AgentList

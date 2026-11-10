@@ -247,6 +247,14 @@ impl Store {
         Ok(())
     }
 
+    /// Deletes a stored workflow definition (history and audit are kept).
+    pub fn delete_workflow(&self, id: &str) -> Result<bool> {
+        let n = self
+            .conn()?
+            .execute("DELETE FROM workflows WHERE id = ?1", params![id])?;
+        Ok(n > 0)
+    }
+
     /// Lists stored workflows as `(id, definition, state)`.
     pub fn list_workflows(&self) -> Result<Vec<(String, String, String)>> {
         let conn = self.conn()?;

@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "name": "Ambar marketplace",
+  "packages": [
+    {
+      "name": "dev.ambar.daily-notes",
+      "version": "1.0.0",
+      "description": "Starts a dated notes file every weekday morning",
+      "author": "Ambar Examples",
+      "url": "packages/dev.ambar.daily-notes-1.0.0.ambarpkg",
+      "sha256": "629f0d866c97e680e29137fad79af49656871fc7d930b17ea3e9a0d47f055d50",
+      "signer": "1d9e53421fa89438"
+    },
+    {
+      "name": "dev.ambar.screenshot-sorter",
+      "version": "1.0.0",
+      "description": "Moves new screenshots off the Desktop into Pictures/Screenshots by date",
+      "author": "Ambar Examples",
+      "url": "packages/dev.ambar.screenshot-sorter-1.0.0.ambarpkg",
+      "sha256": "5aae2c9645c6905d7b76445177e6159123ea9d60ea2143fd3f2a2e507803d4cd",
+      "signer": "1d9e53421fa89438"
+    },
+    {
+      "name": "dev.ambar.tidy-downloads",
+      "version": "1.0.0",
+      "description": "Files new PDFs and images from Downloads into dated folders",
+      "author": "Ambar Examples",
+      "url": "packages/dev.ambar.tidy-downloads-1.0.0.ambarpkg",
+      "sha256": "e5fb30db9df82b56c05974ac25257fbb2d48e5deb0815c4e0165571e3726ee51",
+      "signer": "1d9e53421fa89438"
+    }
+  ]
+}

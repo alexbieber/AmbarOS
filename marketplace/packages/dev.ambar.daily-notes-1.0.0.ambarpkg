@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "manifest": {
+    "name": "dev.ambar.daily-notes",
+    "version": "1.0.0",
+    "description": "Starts a dated notes file every weekday morning",
+    "author": "Ambar Examples",
+    "license": "Apache-2.0",
+    "homepage": "",
+    "workflows": [
+      "workflows/daily-note.toml"
+    ]
+  },
+  "files": {
+    "workflows/daily-note.toml": "id = \"daily-note\"\nname = \"Daily note\"\n\n[trigger]\ntype = \"schedule\"\ncron = \"30 8 * * 1-5\"\n\n[[actions]]\ntype = \"write_file\"\npath = \"~/Documents/Notes/{date}.md\"\ncontent = \"# {date}\\n\\n## Today\\n- \\n\\n## Notes\\n\"\nappend = true\n\n[[actions]]\ntype = \"notify\"\ntitle = \"Today's note is ready\"\nbody = \"Documents/Notes/{date}.md\"\n\n[permissions]\nwrite = [\"~/Documents/Notes\"]\nnotify = true\n"
+  },
+  "signature": {
+    "publisher": "Ambar Examples",
+    "public_key": "8bc227166b64ec1c019b02eb6774bd6fa4f791d6ed7f40a503b64a86d9bd9e2d",
+    "signature": "49617b2d4ef3207e376a8b37b6f20efe3ddba4ebf57a72e11278714049fbbcc1026ccb4f76c7dd23f94878e64a7792d117b178406cb58adaed7155729c6cf609"
+  }
+}

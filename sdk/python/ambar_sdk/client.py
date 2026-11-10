@@ -158,6 +158,10 @@ class Client:
     def run_now(self, workflow_id: str) -> dict:
         return self._op("run_now", id=workflow_id)
 
+    def remove(self, workflow_id: str) -> None:
+        """Owner only. Deletes the workflow and its grant; history is kept."""
+        self._op("remove", id=workflow_id)
+
     def revoke(self, workflow_id: str) -> None:
         self._op("revoke", id=workflow_id)
 

@@ -533,7 +533,8 @@ async fn dispatch(
         | Request::Resume { id }
         | Request::Cancel { id }
         | Request::RunNow { id }
-        | Request::Revoke { id } => id.clone(),
+        | Request::Revoke { id }
+        | Request::Remove { id } => id.clone(),
         Request::Register { definition, .. } => Workflow::from_toml(definition)
             .map(|w| w.id)
             .unwrap_or_else(|_| SERVICE_AUDIT_ID.into()),
@@ -565,6 +566,7 @@ async fn dispatch(
         Request::Pause { id } => unit(engine.pause(&id)),
         Request::Resume { id } => unit(engine.resume(&id)),
         Request::Cancel { id } => unit(engine.cancel(&id)),
+        Request::Remove { id } => unit(engine.remove(&id)),
         Request::Revoke { id } => match engine.workflow(&id) {
             Ok(_) => match engine.revoke_permissions(&id) {
                 Ok(removed) => Response::ok(serde_json::json!({ "revoked": removed })),

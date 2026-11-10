@@ -40,6 +40,26 @@ jobs:
             [ -z "$out" ]  # systemd-analyze exits 0 even on warnings
           fi
 
+  python:
+    name: Python SDK + Automation Center + Plasma theme
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 desktop-file-utils
+      - run: pip install "PySide6-Essentials>=6.6" pytest
+      - run: cargo build --workspace --locked
+      - run: QT_QPA_PLATFORM=offscreen AMBAR_SCREENSHOTS=screenshots python -m pytest -q sdk/python/tests desktop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: automation-center-screenshots
+          path: screenshots/
+
   msrv:
     name: MSRV (1.89)
     runs-on: ubuntu-latest

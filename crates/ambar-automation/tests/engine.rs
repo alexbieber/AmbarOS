@@ -798,3 +798,19 @@ async fn shutdown_cancels_runs_after_grace() {
     assert_eq!(r.status, ExecutionStatus::Cancelled, "{r:?}");
     assert!(!e.root.join("work/second.txt").exists());
 }
+
+#[tokio::test]
+async fn remove_deletes_definition_and_grant_but_keeps_history() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    e.engine.remove("two").unwrap();
+    release.send(()).unwrap();
+    let r = timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(r.status, ExecutionStatus::Cancelled, "in-flight run stops");
+    assert!(e.engine.state("two").is_err());
+    assert!(e.engine.store().list_workflows().unwrap().is_empty());
+    assert!(e.engine.store().grant("two").unwrap().is_none());
+    assert_eq!(e.engine.history(Some("two"), 10).unwrap().len(), 1);
+    // The id can be registered again from scratch.
+    e.engine.register(wf(TWO_STEP, &e.root)).unwrap();
+    assert!(e.engine.activate("two").is_err(), "old grant is gone");
+}

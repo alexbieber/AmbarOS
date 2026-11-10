@@ -528,6 +528,22 @@ impl Engine {
         self.set_state(id, WorkflowState::Inactive)
     }
 
+    /// Removes a workflow entirely: stops its trigger, aborts a run in progress
+    /// at its next action boundary, deletes the definition and the grant.
+    /// Execution history and the audit log are kept.
+    pub fn remove(&self, id: &str) -> Result<()> {
+        let slot = self
+            .slots()?
+            .remove(id)
+            .ok_or_else(|| EngineError::NotFound(id.into()))?;
+        slot.cancel.cancel();
+        slot.state_tx.send_replace(WorkflowState::Cancelled);
+        self.inner.store.delete_workflow(id)?;
+        self.inner.store.revoke_grant(id)?;
+        self.inner.store.audit(id, "removed", "")?;
+        Ok(())
+    }
+
     /// Whether a run of this workflow is in progress right now.
     pub fn is_running(&self, id: &str) -> Result<bool> {
         let slots = self.slots()?;

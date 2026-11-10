@@ -1,0 +1,23 @@
+id = "tidy-downloads-documents"
+name = "File downloaded documents"
+
+[trigger]
+type = "folder_watch"
+path = "~/Downloads"
+
+[[conditions]]
+type = "file_extension"
+any_of = ["pdf", "docx", "xlsx", "pptx"]
+
+[[actions]]
+type = "move_file"
+to_dir = "~/Documents/Downloads/{file_ext}/{date}"
+
+[[actions]]
+type = "notify"
+title = "Filed {file_name}"
+body = "Moved to Documents/Downloads/{file_ext}"
+
+[permissions]
+write = ["~/Downloads", "~/Documents/Downloads"]
+notify = true

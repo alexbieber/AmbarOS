@@ -93,6 +93,11 @@ pub enum WorkflowCmd {
         /// Workflow id.
         id: String,
     },
+    /// Remove a workflow and its permission grant (history is kept).
+    Remove {
+        /// Workflow id.
+        id: String,
+    },
 }
 
 async fn connect(paths: &ServicePaths) -> Result<Client> {
@@ -503,6 +508,10 @@ pub async fn workflow(cmd: &WorkflowCmd, paths: &ServicePaths) -> Result<i32> {
         WorkflowCmd::Cancel { id } => {
             c.cancel(id).await?;
             println!("cancelled `{id}`");
+        }
+        WorkflowCmd::Remove { id } => {
+            c.remove(id).await?;
+            println!("removed `{id}`");
         }
         WorkflowCmd::Run { id } => {
             let r = c.run_now(id).await?;
