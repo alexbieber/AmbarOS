@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ambar-center"
+version = "0.1.0"
+description = "Ambar Automation Center: desktop interface to the ambard automation service."
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = ["PySide6-Essentials>=6.6", "ambar-sdk>=0.1"]
+
+[project.gui-scripts]
+ambar-center = "ambar_center.app:main"
+
+[tool.setuptools]
+packages = ["ambar_center"]
+
+[tool.setuptools.package-data]
+ambar_center = ["qml/*.qml", "icon.svg"]

@@ -1,0 +1,19 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Id": "os.ambar.desktop.dark",
+    "Name": "Ambar Dark",
+    "Description": "Ambar Dark: warm, minimal desktop with a top bar and a floating dock",
+    "Authors": [
+      {
+        "Name": "Ambar Singh"
+      }
+    ],
+    "Category": "",
+    "License": "Apache-2.0",
+    "Version": "0.1.0",
+    "Website": "https://github.com/alexbieber/AmbarOS"
+  },
+  "X-Plasma-APIVersion": "2",
+  "X-Plasma-MainScript": "defaults"
+}

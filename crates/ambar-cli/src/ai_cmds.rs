@@ -52,6 +52,9 @@ pub enum AiCmd {
         /// Skip confirmations (refused when the review finds high risks).
         #[arg(long)]
         yes: bool,
+        /// Print the draft as JSON and save nothing (for the desktop app and scripts).
+        #[arg(long)]
+        json: bool,
     },
     /// Ask the model for automation ideas based on your existing workflows.
     Suggest {
@@ -242,6 +245,7 @@ pub async fn ai(cmd: &AiCmd, paths: &ServicePaths) -> Result<i32> {
             add,
             enable,
             yes,
+            json,
         } => {
             let description = description.join(" ");
             let (p, cfg) = provider(paths)?;
@@ -253,6 +257,26 @@ pub async fn ai(cmd: &AiCmd, paths: &ServicePaths) -> Result<i32> {
                 ..Default::default()
             };
             let draft = generate(p.as_ref(), &description, &opts).await?;
+            if *json {
+                let wf = &draft.workflow;
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "id": wf.id,
+                        "name": wf.name,
+                        "trigger": wf.trigger.kind(),
+                        "toml": draft.toml,
+                        "attempts": draft.attempts,
+                        "risks": draft.risks,
+                        "permissions": {
+                            "read": wf.permissions.read,
+                            "write": wf.permissions.write,
+                            "notify": wf.permissions.notify,
+                        },
+                    }))?
+                );
+                return Ok(0);
+            }
             print_draft(&draft);
 
             let high = draft.risks.iter().any(|r| r.level == RiskLevel::High);

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Automation Center
+GenericName=Automations
+Comment=See, approve and control what Ambar automates for you
+Exec=ambar-center
+Icon=os.ambar.AutomationCenter
+Terminal=false
+Categories=Utility;
+Keywords=automation;workflow;agent;ambar;
+StartupNotify=true
+StartupWMClass=ambar-center

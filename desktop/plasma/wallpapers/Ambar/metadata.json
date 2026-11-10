@@ -1,0 +1,13 @@
+{
+  "KPackageStructure": "Wallpaper/Images",
+  "KPlugin": {
+    "Id": "Ambar",
+    "Name": "Ambar",
+    "Authors": [
+      {
+        "Name": "Ambar Singh"
+      }
+    ],
+    "License": "CC-BY-SA-4.0"
+  }
+}
