@@ -1,5 +1,7 @@
 //! `ambar` — command-line front end for the Ambar automation engine.
 
+mod service_cmds;
+
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -8,7 +10,8 @@ use ambar_automation::{
     ApprovalRequest, Approver, DesktopNotifier, Engine, EngineConfig, EngineEvent, ExecutionRecord,
     LogNotifier, Notifier, Store, Trigger, ValidationOptions, Workflow,
 };
-use anyhow::{Context, Result, bail};
+use ambar_service::{PathError, ServicePaths};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
@@ -76,6 +79,12 @@ enum Command {
         /// Workflow id.
         workflow: String,
     },
+    /// Manage the ambard background service.
+    #[command(subcommand)]
+    Service(service_cmds::ServiceCmd),
+    /// Manage workflows in the running ambard service.
+    #[command(subcommand)]
+    Workflow(service_cmds::WorkflowCmd),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -103,7 +112,7 @@ impl Approver for TerminalApprover {
     }
 }
 
-fn ask(prompt: &str) -> bool {
+pub(crate) fn ask(prompt: &str) -> bool {
     eprint!("{prompt}");
     let _ = io::stderr().flush();
     let mut line = String::new();
@@ -117,11 +126,7 @@ fn data_dir(cli: &Cli) -> Result<PathBuf> {
     if let Some(d) = &cli.data_dir {
         return Ok(d.clone());
     }
-    if let Some(x) = std::env::var_os("XDG_DATA_HOME") {
-        return Ok(PathBuf::from(x).join("ambar"));
-    }
-    let home = std::env::var_os("HOME").context("HOME is not set; pass --data-dir")?;
-    Ok(PathBuf::from(home).join(".local/share/ambar"))
+    ServicePaths::default_data_dir().context("HOME is not set; pass --data-dir")
 }
 
 fn open_store(dir: &Path) -> Result<Store> {
@@ -129,15 +134,19 @@ fn open_store(dir: &Path) -> Result<Store> {
 }
 
 fn load(file: &Path) -> Result<Workflow> {
+    load_with(file, &ValidationOptions::default())
+}
+
+pub(crate) fn load_with(file: &Path, opts: &ValidationOptions) -> Result<Workflow> {
     let wf = Workflow::from_file(file).with_context(|| format!("reading {}", file.display()))?;
-    if let Err(errors) = wf.validate(&ValidationOptions::default()) {
+    if let Err(errors) = wf.validate(opts) {
         let list: Vec<String> = errors.iter().map(|e| format!("  - {e}")).collect();
         bail!("{} is invalid:\n{}", file.display(), list.join("\n"));
     }
     Ok(wf)
 }
 
-fn describe(wf: &Workflow) {
+pub(crate) fn describe(wf: &Workflow) {
     println!("{} ({})", wf.name, wf.id);
     if !wf.description.is_empty() {
         println!("  {}", wf.description);
@@ -200,7 +209,7 @@ fn print_permissions(wf: &Workflow) {
     }
 }
 
-fn print_run(r: &ExecutionRecord, steps: bool) {
+pub(crate) fn print_run(r: &ExecutionRecord, steps: bool) {
     let when = r
         .started_at
         .with_timezone(&chrono::Local)
@@ -258,6 +267,18 @@ async fn main() -> Result<()> {
         } => {
             let wf = load(file)?;
             let dir = data_dir(&cli)?;
+            // One engine per data directory: refuse while ambard owns it, so a
+            // workflow can never run twice.
+            let _lock = ServicePaths::new(&dir)
+                .acquire_lock()
+                .map_err(|e| match e {
+                    PathError::AlreadyRunning { pid, .. } => anyhow!(
+                        "ambard (pid {pid}) is running for this data directory; \
+                     use `ambar workflow add {}` to run it in the background",
+                        file.display()
+                    ),
+                    other => other.into(),
+                })?;
             let notifier: Arc<dyn Notifier> = match notify {
                 NotifyTarget::Desktop => Arc::new(DesktopNotifier),
                 NotifyTarget::Log => Arc::new(LogNotifier),
@@ -341,6 +362,14 @@ async fn main() -> Result<()> {
             for (id, _, state) in store.list_workflows()? {
                 println!("{id:<24} {state}");
             }
+        }
+        Command::Service(cmd) => {
+            let code = service_cmds::service(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Workflow(cmd) => {
+            let code = service_cmds::workflow(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
         }
         Command::Revoke { workflow } => {
             let store = open_store(&data_dir(&cli)?)?;

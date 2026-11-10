@@ -8,10 +8,11 @@ the openness of Linux, and automation built in from the start. See
 
 ## Status
 
-**Phases 1–2 (Foundation + Automation Engine) are implemented and tested.**
-Later phases (AI, agents, desktop, ecosystem, bootable image) have not started.
-See [`docs/STATUS.md`](docs/STATUS.md) for exactly what works, what doesn't, and
-the known risks.
+**Phases 1–3 are implemented and tested:** the automation engine and the
+`ambard` background service. AI, desktop, agents, ecosystem and the bootable
+image have not started. Everything has been tested on Linux only; macOS is
+not yet verified. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what works,
+what doesn't, and the known risks.
 
 | Capability (Phase 2 deliverable) | Status | Test |
 |---|---|---|
@@ -24,8 +25,12 @@ the known risks.
 | Pause and cancel workflows | ✅ | `pause_*`, `cancel_stops_an_in_progress_run` |
 | Enforce permissions | ✅ | `activation_requires_grant`, `runtime_scope_is_enforced`, `revoked_grant_denies_runs` |
 
-31 automated tests (18 unit, 13 end-to-end). `cargo fmt`, `cargo clippy -D warnings`
-and `cargo audit` are clean.
+Phase 3 (`ambard` background service): background runs, IPC with auth, restore
+after restart, crash recovery, duplicate-run prevention, audit and health checks.
+See [`docs/service.md`](docs/service.md).
+
+67 automated tests (unit, in-process daemon, and real-process tests including
+SIGKILL recovery). `cargo fmt`, `cargo clippy -D warnings` and `cargo audit` are clean.
 
 ## Repository layout
 
@@ -40,7 +45,10 @@ crates/
     src/history.rs      SQLite: workflows, grants, executions, audit log
     src/notify.rs       Notification backends
     tests/engine.rs     End-to-end tests of every Phase 2 capability
-  ambar-cli/          `ambar` command-line tool
+  ambar-service/      ambard: daemon, IPC protocol + auth, client, launchd/systemd units
+    tests/daemon.rs     In-process daemon tests over a real socket
+  ambar-cli/          `ambar` CLI and `ambard` binary
+    tests/service.rs    Real-process tests (start/stop, restart, SIGKILL, SIGTERM)
 examples/             Sample workflows
 docs/                 Architecture, workflow format, status, master plan
 ```
@@ -51,10 +59,24 @@ Requires Rust 1.89+.
 
 ```sh
 cargo build --release
-./target/release/ambar validate examples/organize-downloads.toml
-./target/release/ambar run examples/organize-downloads.toml   # asks before granting access
-./target/release/ambar history --steps
-./target/release/ambar audit
+export PATH="$PWD/target/release:$PATH"
+
+ambar validate examples/organize-downloads.toml
+
+# Background service
+ambar service start
+ambar workflow add examples/organize-downloads.toml --enable   # asks before granting access
+ambar workflow list
+ambar service status
+ambar history --steps
+ambar audit
+ambar service stop
+
+# Start at login, so enabled workflows survive a reboot (launchd / systemd --user)
+ambar service install
+
+# Or run one workflow in the foreground, without the service
+ambar run examples/daily-log.toml --once
 ```
 
 A workflow looks like this:

@@ -682,3 +682,119 @@ write = ["$ROOT/out"]
     assert_eq!(run.steps[1].action, "copy_file");
     assert!(store.grant("h").unwrap().is_some());
 }
+
+// ---------------------------------------------------------------- Phase 3 engine additions
+
+#[tokio::test]
+async fn disable_lets_the_current_run_finish() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    e.engine.disable("two").unwrap();
+    assert_eq!(e.engine.state("two").unwrap(), WorkflowState::Inactive);
+    assert!(e.engine.is_running("two").unwrap());
+    release.send(()).unwrap();
+    let r = timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(r.status, ExecutionStatus::Succeeded, "{r:?}");
+    assert!(e.root.join("work/second.txt").exists());
+    assert!(!e.engine.is_running("two").unwrap());
+    // Disabled workflows cannot be run until re-enabled.
+    assert!(e.engine.run_now("two").await.is_err());
+    e.engine.activate("two").unwrap();
+}
+
+#[tokio::test]
+async fn manual_run_is_rejected_while_running() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    let err = e.engine.run_now("two").await.unwrap_err();
+    assert!(err.to_string().contains("already running"), "{err}");
+    release.send(()).unwrap();
+    timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(e.engine.history(Some("two"), 10).unwrap().len(), 1);
+}
+
+#[derive(Debug)]
+struct SlowApprover(Duration);
+impl Approver for SlowApprover {
+    fn approve(&self, _: &ApprovalRequest) -> bool {
+        std::thread::sleep(self.0);
+        true
+    }
+}
+
+#[tokio::test]
+async fn overlapping_schedule_ticks_are_skipped_not_duplicated() {
+    let e = env_with(Arc::new(SlowApprover(Duration::from_millis(700))));
+    std::fs::create_dir_all(e.root.join("work")).unwrap();
+    e.engine
+        .register(wf(
+            r#"
+id = "slow"
+name = "Slow"
+[trigger]
+type = "schedule"
+every = "100ms"
+[[actions]]
+type = "write_file"
+path = "$ROOT/work/log.txt"
+content = "run"
+append = true
+[[actions]]
+type = "trash_file"
+path = "$ROOT/work/missing.txt"
+[permissions]
+write = ["$ROOT/work"]
+"#,
+            &e.root,
+        ))
+        .unwrap();
+    e.engine.grant_permissions("slow", false).unwrap();
+    e.engine.activate("slow").unwrap();
+    tokio::time::sleep(Duration::from_millis(1600)).await;
+    e.engine.cancel("slow").unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+
+    let runs = e.engine.history(Some("slow"), 1000).unwrap();
+    let skipped = runs
+        .iter()
+        .filter(|r| r.status == ExecutionStatus::Skipped)
+        .count();
+    let ran = runs.len() - skipped;
+    assert!(skipped >= 5, "expected skipped ticks, got {runs:?}");
+    // ~1.6s / 0.7s per run: at most 3 real runs, never concurrent.
+    assert!((1..=3).contains(&ran), "ran {ran}");
+    let lines = std::fs::read_to_string(e.root.join("work/log.txt")).unwrap();
+    assert_eq!(lines.lines().count(), ran);
+    for r in runs.iter().filter(|r| r.status == ExecutionStatus::Skipped) {
+        assert_eq!(r.error.as_deref(), Some("previous run still in progress"));
+    }
+}
+
+#[tokio::test]
+async fn shutdown_waits_for_runs_within_grace() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    let engine = e.engine.clone();
+    let shut = tokio::spawn(async move { engine.shutdown(Duration::from_secs(5)).await });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(!shut.is_finished(), "shutdown must wait for the run");
+    release.send(()).unwrap();
+    let report = timeout(WAIT, shut).await.unwrap().unwrap();
+    assert_eq!(report.interrupted, 0);
+    let r = timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(r.status, ExecutionStatus::Succeeded);
+    // State is preserved for restore; new runs are refused.
+    assert_eq!(e.engine.state("two").unwrap(), WorkflowState::Active);
+    assert!(e.engine.run_now("two").await.is_err());
+}
+
+#[tokio::test]
+async fn shutdown_cancels_runs_after_grace() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    let engine = e.engine.clone();
+    let shut = tokio::spawn(async move { engine.shutdown(Duration::from_millis(200)).await });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    release.send(()).unwrap();
+    let report = timeout(WAIT, shut).await.unwrap().unwrap();
+    assert_eq!(report.interrupted, 1);
+    let r = timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(r.status, ExecutionStatus::Cancelled, "{r:?}");
+    assert!(!e.root.join("work/second.txt").exists());
+}

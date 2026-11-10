@@ -27,6 +27,18 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked
       - run: cargo test --workspace --locked
       - run: cargo doc --workspace --no-deps --locked
+      - name: Validate launchd / systemd unit files
+        shell: bash
+        run: |
+          U="$RUNNER_TEMP/units"; mkdir -p "$U"
+          printf '#!/bin/sh\n' > "$U/ambard"; chmod +x "$U/ambard"
+          AMBAR_DUMP_UNITS="$U" cargo test -p ambar-service --lib dump_units --locked
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            plutil -lint "$U/os.ambar.ambard.plist"
+          else
+            out=$(systemd-analyze verify --man=no "$U/ambard.service" 2>&1); echo "$out"
+            [ -z "$out" ]  # systemd-analyze exits 0 even on warnings
+          fi
 
   msrv:
     name: MSRV (1.89)

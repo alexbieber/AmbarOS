@@ -1,0 +1,27 @@
+[package]
+name = "ambar-service"
+description = "ambard: the Ambar OS background automation service, its local IPC protocol and client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+ambar-automation = { path = "../ambar-automation" }
+chrono.workspace = true
+getrandom.workspace = true
+rustix.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

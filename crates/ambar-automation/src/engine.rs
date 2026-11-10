@@ -22,6 +22,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -156,8 +157,30 @@ pub enum EngineEvent {
 struct Slot {
     workflow: Arc<Workflow>,
     state_tx: watch::Sender<WorkflowState>,
+    /// Cancels triggers *and* in-progress runs.
     cancel: CancellationToken,
+    /// Child of `cancel`: stops triggers only (disable, shutdown).
+    triggers: CancellationToken,
     run_lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+/// What to do when a firing arrives while the workflow is already running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Overlap {
+    /// Wait for the current run (file events: each file must be handled).
+    Queue,
+    /// Record a `skipped` execution (schedule ticks: no backlog, no duplicates).
+    Skip,
+    /// Return an error (manual runs: tell the caller).
+    Reject,
+}
+
+/// Outcome of [`Engine::shutdown`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShutdownReport {
+    /// Runs that were still going when the grace period ended and were
+    /// cancelled at their next action boundary.
+    pub interrupted: usize,
 }
 
 impl Slot {
@@ -174,6 +197,7 @@ struct Inner {
     config: EngineConfig,
     slots: Mutex<HashMap<String, Slot>>,
     events: broadcast::Sender<EngineEvent>,
+    shutting_down: AtomicBool,
 }
 
 /// The automation engine. Cheap to clone; clones share state.
@@ -210,6 +234,7 @@ impl Engine {
                 config,
                 slots: Mutex::new(HashMap::new()),
                 events,
+                shutting_down: AtomicBool::new(false),
             }),
         })
     }
@@ -261,14 +286,22 @@ impl Engine {
                     existing.state()
                 )));
             }
+            // Keep the run lock of a replaced workflow, so a run that is still
+            // finishing can never overlap with a run of the new definition.
+            let run_lock = slots
+                .get(&id)
+                .map(|s| s.run_lock.clone())
+                .unwrap_or_else(|| Arc::new(tokio::sync::Mutex::new(())));
             let (state_tx, _) = watch::channel(WorkflowState::Inactive);
+            let cancel = CancellationToken::new();
             slots.insert(
                 id.clone(),
                 Slot {
                     workflow: Arc::new(workflow),
                     state_tx,
-                    cancel: CancellationToken::new(),
-                    run_lock: Arc::new(tokio::sync::Mutex::new(())),
+                    triggers: cancel.child_token(),
+                    cancel,
+                    run_lock,
                 },
             );
         }
@@ -365,8 +398,12 @@ impl Engine {
                     )));
                 }
             }
+            if self.inner.shutting_down.load(Ordering::SeqCst) {
+                return Err(EngineError::State("the engine is shutting down".into()));
+            }
             slot.cancel = CancellationToken::new();
-            (slot.workflow.clone(), slot.cancel.clone())
+            slot.triggers = slot.cancel.child_token();
+            (slot.workflow.clone(), slot.triggers.clone())
         };
 
         let grant = self
@@ -471,13 +508,75 @@ impl Engine {
         self.set_state(id, WorkflowState::Cancelled)
     }
 
-    /// Stops every workflow's triggers without changing stored states.
-    pub fn shutdown(&self) {
-        if let Ok(slots) = self.slots() {
-            for slot in slots.values() {
-                slot.cancel.cancel();
+    /// Disables a workflow: stops its triggers, but lets a run that is already
+    /// in progress finish. State becomes `Inactive`; `activate` re-enables it.
+    pub fn disable(&self, id: &str) -> Result<()> {
+        match self.state(id)? {
+            WorkflowState::Active | WorkflowState::Paused => {}
+            s => {
+                return Err(EngineError::State(format!(
+                    "cannot disable `{id}`: it is {s}"
+                )));
             }
         }
+        {
+            let slots = self.slots()?;
+            if let Some(slot) = slots.get(id) {
+                slot.triggers.cancel();
+            }
+        }
+        self.set_state(id, WorkflowState::Inactive)
+    }
+
+    /// Whether a run of this workflow is in progress right now.
+    pub fn is_running(&self, id: &str) -> Result<bool> {
+        let slots = self.slots()?;
+        let slot = slots
+            .get(id)
+            .ok_or_else(|| EngineError::NotFound(id.into()))?;
+        Ok(slot.run_lock.try_lock().is_err())
+    }
+
+    /// Graceful shutdown. Stops all triggers and refuses new runs, then waits
+    /// up to `grace` for in-progress runs to finish. Runs still going after
+    /// that are cancelled at their next action boundary. Stored workflow
+    /// states are left unchanged, so they can be restored on the next start.
+    pub async fn shutdown(&self, grace: Duration) -> ShutdownReport {
+        self.inner.shutting_down.store(true, Ordering::SeqCst);
+        let (locks, cancels): (Vec<_>, Vec<_>) = match self.slots() {
+            Ok(slots) => slots
+                .values()
+                .map(|s| {
+                    s.triggers.cancel();
+                    (s.run_lock.clone(), s.cancel.clone())
+                })
+                .unzip(),
+            Err(_) => (Vec::new(), Vec::new()),
+        };
+        let wait_all = |locks: Vec<Arc<tokio::sync::Mutex<()>>>| async move {
+            for l in locks {
+                drop(l.lock().await);
+            }
+        };
+        if tokio::time::timeout(grace, wait_all(locks.clone()))
+            .await
+            .is_ok()
+        {
+            return ShutdownReport { interrupted: 0 };
+        }
+        let interrupted = locks.iter().filter(|l| l.try_lock().is_err()).count();
+        tracing::warn!(interrupted, "grace period over; cancelling runs");
+        for c in &cancels {
+            c.cancel();
+        }
+        // Actions are short filesystem operations; allow them to reach a boundary.
+        let _ = tokio::time::timeout(Duration::from_secs(10), wait_all(locks)).await;
+        ShutdownReport { interrupted }
+    }
+
+    /// Whether [`Engine::shutdown`] has been called.
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.shutting_down.load(Ordering::SeqCst)
     }
 
     /// Runs an active manual or scheduled workflow immediately and waits for it.
@@ -496,7 +595,7 @@ impl Engine {
                 )));
             }
         }
-        self.execute(id, "manual".into(), Vars::new(), None)
+        self.execute(id, "manual".into(), Vars::new(), None, Overlap::Reject)
             .await?
             .ok_or_else(|| EngineError::State(format!("`{id}` was cancelled before it ran")))
     }
@@ -508,7 +607,10 @@ impl Engine {
 
     async fn run_fire(&self, id: &str, fire: Fire) -> Result<Option<ExecutionRecord>> {
         match fire {
-            Fire::Schedule => self.execute(id, "schedule".into(), Vars::new(), None).await,
+            Fire::Schedule => {
+                self.execute(id, "schedule".into(), Vars::new(), None, Overlap::Skip)
+                    .await
+            }
             Fire::File { path, kind } => {
                 let mut vars = Vars::new();
                 vars.insert("file", path.display().to_string());
@@ -537,7 +639,8 @@ impl Engine {
                 );
                 vars.insert("event", kind.as_str().into());
                 let desc = format!("{}: {}", kind.as_str(), path.display());
-                self.execute(id, desc, vars, Some(path)).await
+                self.execute(id, desc, vars, Some(path), Overlap::Queue)
+                    .await
             }
         }
     }
@@ -563,7 +666,11 @@ impl Engine {
         trigger: String,
         mut vars: Vars,
         file: Option<PathBuf>,
+        overlap: Overlap,
     ) -> Result<Option<ExecutionRecord>> {
+        if self.is_shutting_down() {
+            return Ok(None);
+        }
         let Snapshot {
             workflow,
             mut state_rx,
@@ -595,20 +702,36 @@ impl Engine {
             steps: Vec::new(),
         };
 
-        if state == WorkflowState::Paused {
+        let skip = |mut record: ExecutionRecord, why: &str| -> Result<Option<ExecutionRecord>> {
             record.status = ExecutionStatus::Skipped;
-            record.error = Some("workflow was paused".into());
+            record.error = Some(why.into());
             record.finished_at = Some(Utc::now());
             self.inner.store.begin_execution(&record)?;
             self.emit(EngineEvent::ExecutionFinished(record.clone()));
-            return Ok(Some(record));
+            Ok(Some(record))
+        };
+
+        if state == WorkflowState::Paused {
+            return skip(record, "workflow was paused");
         }
 
-        // One run at a time per workflow; queued runs give up on cancel.
-        let _guard = tokio::select! {
-            g = run_lock.lock_owned() => g,
-            _ = cancel.cancelled() => return Ok(None),
+        // One run at a time per workflow.
+        let _guard = match overlap {
+            Overlap::Queue => tokio::select! {
+                g = run_lock.lock_owned() => g,
+                _ = cancel.cancelled() => return Ok(None),
+            },
+            Overlap::Skip => match run_lock.try_lock_owned() {
+                Ok(g) => g,
+                Err(_) => return skip(record, "previous run still in progress"),
+            },
+            Overlap::Reject => run_lock
+                .try_lock_owned()
+                .map_err(|_| EngineError::State(format!("`{id}` is already running")))?,
         };
+        if self.is_shutting_down() {
+            return Ok(None);
+        }
 
         self.inner.store.begin_execution(&record)?;
 

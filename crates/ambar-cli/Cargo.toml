@@ -12,14 +12,24 @@ authors.workspace = true
 name = "ambar"
 path = "src/main.rs"
 
+[[bin]]
+name = "ambard"
+path = "src/bin/ambard.rs"
+
 [dependencies]
 ambar-automation = { path = "../ambar-automation" }
+ambar-service = { path = "../ambar-service" }
+humantime.workspace = true
+serde_json.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -26,7 +26,8 @@ mod triggers;
 pub mod workflow;
 
 pub use engine::{
-    ApprovalRequest, Approver, DenyAll, Engine, EngineConfig, EngineEvent, WorkflowState,
+    ApprovalRequest, Approver, DenyAll, Engine, EngineConfig, EngineEvent, ShutdownReport,
+    WorkflowState,
 };
 pub use error::{EngineError, Result, ValidationError};
 pub use history::{ExecutionRecord, ExecutionStatus, StepRecord, StepStatus, Store};

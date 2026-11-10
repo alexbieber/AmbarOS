@@ -1,58 +1,87 @@
-# Status — Phases 1 & 2
+# Status
 
 _Last updated: 2026-11-11_
 
-## Repository inspection (before work began)
+Phase numbering follows the updated roadmap:
 
-The `AmbarOS` folder was empty: no code, dependencies or architecture existed.
-Everything here is new.
+1. Phases 1–2: automation foundation
+2. Phase 3: background service
+3. Phase 4: AI automation builder
+4. Phase 5: desktop
+5. Phase 6: agents and security
+6. Phase 7: developer ecosystem
+7. Phase 8: bootable OS
 
-## Done and tested
+| Phase | Status |
+|---|---|
+| 1–2 Automation foundation | Implemented and tested |
+| 3 Background service (`ambard`) | Implemented and tested (see gaps below) |
+| 4–8 | Not started |
 
-**Phase 1 — Foundation**
-- Cargo workspace (edition 2024, MSRV 1.89), with shared dependency versions and lint policy (`unsafe_code = forbid`; clippy `unwrap_used`/`expect_used` warn)
-- Two crates: `ambar-automation` (library) and `ambar-cli` (`ambar` binary)
-- CI: fmt, clippy `-D warnings`, tests and docs on Linux + macOS; MSRV check; `cargo audit`
-- Structured logging via `tracing` (`--json-logs`, `AMBAR_LOG=info`)
-- Reproducible builds: `Cargo.lock` committed, CI uses `--locked`
+## Test results (2026-11-11, Linux container)
 
-**Phase 2 — Automation Engine**: all eight deliverables. The README maps each one to its test.
+| Suite | Tests | What it covers |
+|---|---|---|
+| `ambar-automation` unit | 18 | validation, permissions, symlink escape, actions, history |
+| `ambar-automation` integration | 18 | the 8 Phase 2 capabilities, plus disable, overlap policy, graceful drain |
+| `ambar-service` unit | 13 | private dirs, lock, token, protocol, unit files |
+| `ambar-service` daemon | 13 | in-process daemon over a real socket (below) |
+| `ambar-cli` service | 5 | real `ambar` and `ambard` binaries as separate processes, SIGKILL, SIGTERM |
+| **Total** | **67** | the full suite passed 5/5 consecutive runs |
 
-Verification run on 2026-11-11:
-- `cargo test --workspace`: 31 passed (18 unit + 13 end-to-end); the end-to-end suite passed 10/10 repeated runs
-- `cargo clippy --all-targets -- -D warnings`: clean
-- `cargo fmt --check`: clean
-- `cargo audit`: no advisories (142 crates)
-- CLI smoke test: validate the three examples; trash refused without approval; trash succeeded when pre-approved (file landed in the recoverable trash); scheduled workflow `--once`; `history` and `audit` output
+Checks:
+- `cargo fmt --check`, `cargo clippy --all-targets -D warnings` and `cargo doc` are clean.
+- `cargo audit` is clean. New dependencies: `rustix` (process ids), `getrandom` (token). Both were already in the dependency tree.
+- The generated systemd unit passes `systemd-analyze verify` with no warnings, and the plist is well-formed XML (`xmllint`).
+- **Sabotage checks:**
+  - Bypassing the token check fails `ipc_requires_valid_token_and_hello_first`.
+  - Letting schedule ticks queue instead of skip fails `duplicate_execution_is_prevented`.
+  - Skipping restore fails `enabled_workflows_are_restored_after_restart`.
 
-Not yet verified:
-- CI has not run on GitHub yet; the repo hasn't been pushed.
-- The MSRV job (Rust 1.89) wasn't run locally. 1.89 was taken from `rusqlite`'s declared `rust-version`.
-- Tests ran on Linux only. The macOS folder-watch backend (FSEvents) is untested until CI runs on macOS.
-- Desktop notifications (`notify-send` / `osascript`) were never shown on a real desktop. Tests use the in-memory notifier, and the CLI smoke test used `--notify log`.
+### Phase 3 requirements → tests
 
-## Known gaps and remaining Phase 2 work
+| Requirement | Test(s) |
+|---|---|
+| Run in background without CLI open | `service_start_status_stop`, `workflows_survive_service_restart` |
+| Local IPC | all `ambar-service` daemon tests, all CLI tests |
+| start / stop / pause / resume / cancel / status | `workflow_control_over_ipc`, `workflows_survive_service_restart` |
+| Persist definitions and state | `enabled_workflows_are_restored_after_restart` |
+| Restore after restart | same; `failed_restores_are_reported_and_retried` |
+| Graceful shutdown | `shutdown_lets_in_flight_runs_finish`, `sigterm_is_a_graceful_shutdown`, `shutdown_*` (engine) |
+| Recovery after unexpected termination | `recovers_after_sigkill` (real SIGKILL), `crash_leftovers_are_recovered` |
+| Duplicate execution prevention | `duplicate_execution_is_prevented`, `second_instance_is_refused`, `foreground_run_is_refused_while_service_owns_the_data_dir`, `overlapping_schedule_ticks_are_skipped_not_duplicated` |
+| Audit every control operation | `workflow_control_over_ipc` (exact audit sequence incl. failures), `startup_health_and_graceful_shutdown` |
+| Health checks | `startup_health_and_graceful_shutdown`, `failed_restores_are_reported_and_retried` |
+| IPC authentication / authorization | `ipc_requires_valid_token_and_hello_first`, `peers_must_be_the_same_user`, file-mode assertions |
+| Permission enforcement through the service | `runtime_permissions_still_enforced_through_the_service`, `sensitive_actions_are_refused_in_background_unless_preapproved` |
+| Concurrent workflows | `concurrent_workflows_and_clients` (6 workflows, 20 clients × 20 requests) |
 
-1. **No daemon.** `ambar run` runs the engine in the foreground for a single workflow. `pause`/`resume`/`cancel` exist on the engine API and are tested, but a separate CLI process can't reach a running engine yet. Next step: `ambard` with a D-Bus or varlink interface, plus a systemd user unit.
-2. **No restore on startup.** Stored workflows aren't re-activated when the engine restarts.
-3. **Trash has no restore command.** Trashed files are named `<execution>-<name>`; the original path is only in the step message.
-4. **Cancellation is cooperative.** It takes effect between actions. A long copy of a very large file finishes before the cancel is honoured.
-5. **Loop risk.** A recursive folder watch that moves files into a subfolder of itself will retrigger itself. Validation doesn't detect this yet.
-6. **macOS events.** FSEvents can report renames ambiguously; the watcher falls back to checking whether the path exists.
+## Not verified — do not treat as done
 
-## Technical risks for the overall plan
+- **Nothing has run on macOS yet.** Every result above is from Linux. This includes FSEvents folder watching, `getpeereid`-based peer credentials, `osascript` notifications and the 104-byte socket path limit. Run `cargo test --workspace` on your Mac first.
+- **`ambar service install` / `uninstall` haven't been run** against a real launchd or systemd user session. The container has no user session manager.
+- **The cross-user check is tested as a function only.** The peer-uid rule is unit-tested, but no connection from a second real user was attempted, because the container has only one user.
+- **CI hasn't run on GitHub.**
+- **This is not a security audit.** 67 passing tests don't establish production security. Still to do:
+  - adversarial testing: fuzzing the protocol and workflow parser, races in path resolution
+  - review of the dependency tree beyond `cargo audit`
+  - platform-specific testing on macOS and Fedora
+
+## Remaining work before Phase 4
+
+1. Run the suite on macOS, then exercise `service install` on a Mac and on Fedora.
+2. Fuzz `protocol::read_frame` / `Request` parsing and `Workflow::from_toml` (cargo-fuzz).
+3. Approvals over IPC, so background sensitive actions can ask instead of needing `--allow-sensitive`.
+4. Trash listing and restore (`ambar trash list/restore`).
+5. Scoped client identities on the socket. These must exist before AI agents (Phase 6) are allowed to connect.
+6. Optional: systemd `WatchdogSec` heartbeat.
+
+## Technical risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Scope: a full OS is years of work | Very high | Keep shipping vertical slices; the engine is useful on any Linux/macOS today, before Phase 7 |
-| Phase 3 AI generating unsafe workflows | High | AI output must go through the same `validate` + grant + approval path; there is no exec action to target |
-| KDE Plasma 6 customisation depth | Medium | Theme + Plasma widgets/QML first; avoid forking Plasma |
-| bootc/Fedora image pipeline | Medium | Start from Fedora Kinoite/bootc base images; test in QEMU in CI |
-| Single maintainer + interns | High | Strict CI, small crates, docs per module (this repo's pattern) |
-| SELinux policy for `ambard` | Medium | Write a confined domain early, before the daemon gains capabilities |
-
-## Suggested next milestones
-
-1. `ambard` daemon + IPC + systemd user unit; `ambar pause/resume/cancel/list` talk to it
-2. Restore active workflows on start; `ambar trash list/restore`
-3. Phase 3 start: an LLM provider abstraction plus a "describe it → preview TOML → approve" flow, built on `Workflow::validate`
+| macOS behaviour differs from Linux (FSEvents, launchd) | High until tested | Run the suite on the Mac now; macOS runner in CI |
+| Same-user processes can drive the socket | Medium now, high once agents exist | Scoped tokens per client before Phase 6 |
+| AI-generated workflows (Phase 4) | High | Must go through `validate` + consent + grant; there is no exec action |
+| `ProtectSystem=strict` limits writes to home under systemd | Low | Documented; configurable |
+| Scope: a full OS | Very high | Keep shipping working vertical slices |

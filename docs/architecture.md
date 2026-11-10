@@ -72,10 +72,21 @@
 Firings filtered out by conditions are not recorded, so history doesn't fill
 up with non-matching files.
 
+## Engine additions for the service (Phase 3)
+
+- `disable(id)` stops triggers but lets a run in progress finish. Each slot has
+  a `cancel` token (runs and triggers) and a child `triggers` token (triggers only).
+- Overlap policy per firing source: schedule ticks during a run are recorded
+  as `skipped`, manual runs are rejected, and file events queue.
+- `shutdown(grace)` stops triggers, refuses new runs, waits up to `grace`, then
+  cancels the remaining runs at their next boundary. Stored states are untouched.
+- `register` keeps an existing workflow's run lock, so a replaced definition
+  can't overlap with a finishing run.
+
 ## Where this goes next
 
-The engine is a library on purpose. Phase 3 (natural-language builder) will
-generate `Workflow` TOML and pass it through the same `validate` and grant
-flow, so AI output gets no extra privileges. The planned daemon (`ambard`)
-will host one `Engine` and expose it over D-Bus/varlink to the desktop
-Automation Center and the CLI.
+The engine is a library on purpose; `ambard` (see `service.md`) hosts it.
+Phase 4 (natural-language builder) will generate `Workflow` TOML and pass it
+through the same `validate` → consent → grant flow, so AI output gets no
+extra privileges. The desktop Automation Center will be another `ambard`
+client.
