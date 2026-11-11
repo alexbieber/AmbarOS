@@ -288,3 +288,37 @@ def test_welcome_setup_flow(ui, world, tmp_path, monkeypatch):
     backend.finishWelcome()
     assert welcome_done()
     assert not warnings, warnings
+
+
+def test_recommended_apps_install_only_from_the_fixed_list(ui, monkeypatch):
+    app, win, backend, warnings, tmp = ui
+    from ambar_center import backend as be
+    ran = []
+    monkeypatch.setattr(be.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(backend, "run_in_terminal", ran.append)
+    monkeypatch.setattr(be, "installed_flatpaks", lambda: {"org.signal.Signal"})
+    backend._flatpaks = None
+    apps = backend.recommendedApps
+    assert {"com.google.Chrome", "com.visualstudio.code", "com.valvesoftware.Steam"} <= {a["id"] for a in apps}
+    assert next(a for a in apps if a["id"] == "org.signal.Signal")["installed"]
+    toasts = []
+    backend.toast.connect(lambda k, m: toasts.append((k, m)))
+    # Anything outside the list is dropped, even a crafted ID or a flag.
+    backend.installApps(["com.visualstudio.code", "evil.App", "--from=http://x", "com.google.Chrome"])
+    assert ran == [["flatpak", "install", "--system", "-y", "flathub", "com.google.Chrome", "com.visualstudio.code"]], ran
+    backend.installApps(["evil.App"])
+    assert len(ran) == 1 and toasts[-1][0] == "info"
+    win.setProperty("page", "welcome")
+    pump(app, 0.3)
+    from PySide6.QtCore import QObject
+    step = win.findChild(QObject, "recommendedApps")
+    assert step is not None and step.property("visible")
+    flick = step.parentItem()
+    while flick is not None and flick.property("contentY") is None:
+        flick = flick.parentItem()
+    if flick is not None:  # scroll to the step for the screenshot
+        flick.setProperty("contentY", max(0, flick.property("contentHeight") - flick.property("height")))
+    for theme in ["light", "dark"]:
+        win.setProperty("themeOverride", theme)
+        shot(app, win, f"{theme}-welcome-apps")
+    assert not [w for w in warnings if "Main.qml" in w], warnings

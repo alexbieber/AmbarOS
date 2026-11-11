@@ -29,10 +29,12 @@
 - Files
 - Terminal
 - an office suite
-- mail and calendar
-- music, video and photos
+- mail, calendar, contacts, notes and reminders
+- music, video and photos, and a player for every format (VLC)
+- photo editing (GIMP, Krita), design (Inkscape), video editing (Kdenlive), recording and streaming (OBS)
+- weather, maps, clock, voice recorder, fonts, backup and a few games
 - System Settings
-- an App Store
+- an App Store, plus one-click picks of Chrome, VS Code, Spotify, Zoom, Steam and more on first login
 
 It installs **any app**: the Ambar Store, `.deb` downloads, Flatpak, Snap, AppImage, and Windows programs through Wine.
 

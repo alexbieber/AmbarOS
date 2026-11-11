@@ -30,6 +30,9 @@ AnimationDurationFactor=0.7
 
 [Icons]
 Theme=Papirus
+
+[Sounds]
+Theme=ambar
 CFG
 # --- crisp text everywhere: grayscale antialiasing with slight hinting (what macOS
 # does), so text looks the same on any panel and in screenshots, with no colour fringes.

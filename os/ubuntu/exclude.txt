@@ -3,10 +3,5 @@
 firefox
 thunderbird
 chromium-browser
-# Games that come with Kubuntu's selection.
-kmahjongg
-kmines
-kpat
-ksudoku
 # KDE welcome app: Ambar has its own first-run Welcome.
 plasma-welcome

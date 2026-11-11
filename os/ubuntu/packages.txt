@@ -36,6 +36,29 @@ breeze-gtk-theme
 kde-config-gtk-style
 
 # --- apps beyond Kubuntu's set
+# Day-one apps people expect from macOS and Windows (all Ubuntu packages, updated with the system):
+# Notes, Calendar/Contacts/Tasks (Reminders), photo editing, drawing, design, video editing,
+# streaming/recording, a play-anything player, weather, maps, clock, voice recorder, fonts, backup, games.
+marknote
+merkuro
+gimp
+krita
+inkscape
+kdenlive
+obs-studio
+vlc
+kweather
+marble
+kclock
+krecorder
+font-manager
+kup-backup
+kpat
+kmines
+ksudoku
+kmahjongg
+kblocks
+kdiamond
 falkon
 kamoso
 skanpage

@@ -1,0 +1,9 @@
+[Sound Theme]
+Name=Ambar
+Comment=Ambar OS: soft, warm and quiet
+Inherits=ocean,freedesktop
+Directories=stereo
+Example=theme-demo
+
+[stereo]
+OutputProfile=stereo

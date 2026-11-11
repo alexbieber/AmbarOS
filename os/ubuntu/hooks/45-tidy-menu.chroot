@@ -1,0 +1,32 @@
+#!/bin/bash
+# Keep Launchpad to real apps, like macOS: hide helper entries, duplicates and tools
+# that belong in System Settings. Overrides go in /usr/local/share/applications,
+# which comes first in XDG_DATA_DIRS, so package upgrades don't bring them back.
+set -euo pipefail
+HIDE=(
+  apport-kde.desktop                       # "Report a problem…" (crash reporting asks by itself)
+  com.github.FontManager.FontViewer.desktop # second font app; Font Manager covers it
+  display-im7.q16.desktop display-im6.q16.desktop  # ImageMagick's viewer
+  im-config.desktop                        # "Input Method": System Settings → Keyboard
+  org.fcitx.Fcitx5.desktop                 # starts with the session
+  org.fcitx.fcitx5-migrator.desktop
+  kdesystemsettings.desktop                # duplicate of System Settings
+  org.kde.kdeconnect.nonplasma.desktop org.kde.kdeconnect.sms.desktop  # KDE Connect lives in the menu bar
+  org.kde.kmenuedit.desktop
+  org.kubuntu.restore-desktop-links.desktop
+  org.kubuntu.manage-software.desktop      # the Ambar Store does this
+  synaptic.desktop                         # still there for experts: `sudo synaptic`
+  software-properties-lxqt.desktop software-properties-drivers-lxqt.desktop  # LXQt duplicates
+  fcitx5-configtool.desktop org.fcitx.fcitx5-config-qt.desktop  # in System Settings
+  kbd-layout-viewer5.desktop
+  org.kde.headerthemeeditor.desktop org.kde.ktnef.desktop  # KMail helpers
+  org.kde.kwalletmanager.desktop kwalletmanager5-kwalletd.desktop
+  kde_wacom_tabletfinder.desktop
+  org.kde.bluedevilsendfile.desktop org.kde.bluedevilwizard.desktop  # in the Bluetooth menu
+)
+install -d /usr/local/share/applications
+for f in "${HIDE[@]}"; do
+  src=/usr/share/applications/$f
+  [ -f "$src" ] || continue
+  sed '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$src" > "/usr/local/share/applications/$f"
+done

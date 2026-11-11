@@ -34,13 +34,14 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | Global app menus | Files, Terminal and other apps show their menus in the menu bar | ✅ seen with Files |
 | Control Center | macOS-style modules: Wi-Fi, Bluetooth, Airplane mode, Do Not Disturb, dark mode, Night Light, Display and Sound sliders, screenshot | ✅ reads real Wi-Fi, volume and brightness in the VM · ⚠️ Bluetooth and Wi-Fi switching need hardware |
 | Dock | Floating, rounded and frosted, centred, with pinned apps, soft highlights for running apps, and Trash | ✅ |
-| Launchpad | Full-screen grid of every app | ✅ |
+| Launchpad | Ambar's own: every app on full-screen pages over the blurred desktop, page dots, type to search, Enter to open | ✅ seen in the built desktop |
 | Spotlight-style search | Meta+Space or Alt+Space finds apps, files, settings and automations | ✅ |
 | Mission Control | All windows at a glance (Meta+W or the top-left screen corner) | ✅ |
 | Window buttons | Red, yellow and green traffic lights on the left | ✅ |
 | Light and dark | One switch changes colours, panels, icons and window frames | ✅ |
 | Ambar Plasma Style | Translucent menu bar; rounded popups, menus and tooltips with soft shadows; one style for light and dark | ✅ seen in the built desktop · ⚠ blur needs a real GPU |
 | Terminal | Ambar colours (readable in every colour), JetBrains Mono, roomy margins | ✅ |
+| Sounds | Ambar's own sound theme: soft, quiet chimes for login, messages, errors and more (made for Ambar) | ✅ files and levels checked · ⚠️ not heard here (no audio) |
 | Start-up screen | Ambar logo and progress line instead of KDE's | ✅ renders · ⚠ not yet seen at a real boot |
 | Crisp, consistent text | Inter everywhere, greyscale antialiasing with slight hinting (like macOS); GTK apps (Firefox, GIMP…) use the same font, icons and left-hand window buttons | ✅ font settings checked · ⚠️ not yet seen in a booted image |
 | Touchpad gestures | Plasma's three- and four-finger gestures | ⚠️ needs a touchpad |
@@ -52,9 +53,14 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | Web | Firefox (release builds) or Falkon | ✅ Falkon here · ⚠️ Firefox only in CI builds |
 | Files and system | Files (Dolphin), Terminal (Konsole), System Settings, System Monitor, Disk Usage, Find, Ark | ✅ in the image; 27 key apps are checked at every boot test |
 | Office | LibreOffice Writer, Calc, Impress; Okular (PDF) | ✅ |
-| Mail and calendar | KMail, KOrganizer, Kontact | ✅ |
-| Media | Elisa (music), Haruna (video), Gwenview (photos), Spectacle (screenshots), Kamoso (camera), Skanpage (scanner) | ✅ |
+| Mail, calendar, contacts, reminders | KMail, Merkuro Calendar and Contacts (with tasks), KOrganizer, Kontact | ✅ |
+| Notes | Marknote | ✅ installed in the built desktop |
+| Media | Elisa (music), Haruna and VLC (video), Gwenview (photos), Spectacle (screenshots), Kamoso (camera), Skanpage (scanner), Recorder | ✅ |
+| Creative | GIMP and Krita (photos, painting), Inkscape (design), Kdenlive (video editing), OBS Studio (recording, streaming) | ✅ installed in the built desktop |
+| Everyday | Weather, Marble (maps), Clock, Font Manager, Kup (backups of your files) | ✅ installed in the built desktop |
+| Games | Patience, Mines, Sudoku, Mahjongg, Blocks, Diamond | ✅ installed in the built desktop |
 | Tools | Kate, KCalc, KDE Connect (phone link), Colour Picker, Sweeper | ✅ |
+| Recommended apps | First-login picks from Flathub: Chrome, VS Code, Spotify, Zoom, Slack, Discord, Telegram, Signal, Thunderbird, Steam, Blender, Bitwarden | ✅ the picker is tested · ⚠️ the downloads need internet, not run here |
 | Input | fcitx5 for Indian and other non-Latin scripts | ✅ installed |
 
 ## 4. Install anything

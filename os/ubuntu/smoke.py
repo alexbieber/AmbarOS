@@ -37,11 +37,13 @@ for a in dolphin konsole kate okular gwenview elisa haruna kcalc ark spectacle s
   command -v "$a" >/dev/null && echo "APP_OK $a" || echo "APP_MISSING $a"
 done
 browser=$(cat /etc/ambar-browser); command -v "$browser" >/dev/null && echo "BROWSER_OK $browser"
-for w in os.ambar.menu os.ambar.appname os.ambar.controlcenter org.kde.plasma.kickerdash org.kde.plasma.appmenu org.kde.plasma.icontasks; do
+for w in os.ambar.menu os.ambar.appname os.ambar.controlcenter os.ambar.launchpad org.kde.plasma.appmenu org.kde.plasma.icontasks; do
   grep -rqs "plugin=$w" /home/*/.config/plasma-org.kde.plasma.desktop-appletsrc && echo "WIDGET_OK $w"
 done
 grep -h '^\(Name\|Exec\)=' /usr/share/applications/org.kde.discover.desktop | head -2
 grep -qs '^name=ambar' ~/.config/plasmarc /etc/xdg/plasmarc && [ -f /usr/share/plasma/desktoptheme/ambar/metadata.json ] && echo STYLE_OK
+[ -f /usr/share/sounds/ambar/stereo/desktop-login.oga ] && echo SOUNDS_OK
+for a in marknote gimp krita inkscape kdenlive obs vlc kweather kclock krecorder; do command -v "$a" >/dev/null || echo "APP_MISSING $a"; done
 [ -f /usr/share/konsole/Ambar.profile ] && grep -qs Ambar.profile /etc/xdg/konsolerc && echo TERMINAL_OK
 flatpak remotes --system 2>/dev/null | grep -q flathub && echo FLATHUB_OK
 systemctl --user is-active ambard && echo AMBARD_OK
@@ -66,10 +68,11 @@ EXPECT = [
     ("app name in menu bar", r"^WIDGET_OK os\.ambar\.appname"),
     ("control center", r"^WIDGET_OK os\.ambar\.controlcenter"),
     ("global app menus", r"^WIDGET_OK org\.kde\.plasma\.appmenu"),
-    ("launchpad", r"^WIDGET_OK org\.kde\.plasma\.kickerdash"),
+    ("launchpad", r"^WIDGET_OK os\.ambar\.launchpad"),
     ("dock", r"^WIDGET_OK org\.kde\.plasma\.icontasks"),
     ("ambar plasma style", r"^STYLE_OK"),
     ("ambar terminal", r"^TERMINAL_OK"),
+    ("ambar sounds", r"^SOUNDS_OK"),
     ("browser", r"^BROWSER_OK "),
     ("ambar store", r"^Name=Ambar Store"),
     ("installer", r"^APP_OK calamares"),

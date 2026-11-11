@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Ambar OS" }],
+        "Category": "Application Launchers",
+        "Description": "Launchpad: every app on full-screen pages, with search",
+        "Icon": "view-app-grid-symbolic",
+        "Id": "os.ambar.launchpad",
+        "License": "Apache-2.0",
+        "Name": "Launchpad",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

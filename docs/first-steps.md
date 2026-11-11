@@ -13,7 +13,7 @@ A tour of the desktop, how to install apps, and your first automation.
 | Control Center | **Control Center**: the toggle icon next to the clock | Wi-Fi, Bluetooth, Airplane Mode, Do Not Disturb, Dark Mode, Night Light, display brightness, sound |
 | Spotlight | **Search** | **Meta+Space** (or Alt+Space): apps, files, settings, calculations, automations |
 | Dock | **Dock** at the bottom | Click to open; running apps sit on a soft highlight, the one in front a stronger one; right-click to pin |
-| Launchpad | **Launchpad**: the grid icon at the left of the Dock | All apps A–Z, favourites, categories, search |
+| Launchpad | **Launchpad**: the grid icon at the left of the Dock | Every app A–Z on pages: swipe, scroll or use the arrow keys; start typing to search, Enter opens the first result, Escape closes |
 | Mission Control | **Overview** | **Meta+W**, or a four-finger swipe up on a touchpad |
 | Finder | **Files** (Dolphin) | Tabs, split view, previews, network places |
 | Window buttons | Red, yellow, green circles on the left | Close, minimise, maximise |
@@ -43,12 +43,13 @@ Drivers: **Driver Manager** (in Launchpad) offers NVIDIA and other vendor driver
 
 ### 1. The Welcome setup
 
-The first time you log in, **Welcome to Ambar** opens. It has four steps:
+The first time you log in, **Welcome to Ambar** opens. It has five steps:
 
 1. **Automation service:** it checks that `ambard` (the service that runs automations) is running. It starts with your session, so this is usually already green.
 2. **Appearance:** Light or Dark. This applies to the whole desktop.
 3. **AI assistant (optional):** choose Claude, an OpenAI-compatible service, or a local Ollama model, and enter an API key if it needs one. You can skip this; everything else works without AI.
 4. **Starter automations:** signed, ready-made automations. Each one shows exactly what it can access before you install it.
+5. **Recommended apps (optional):** tick apps that can't come preinstalled, such as Chrome, VS Code, Spotify, Zoom, Steam and Thunderbird. They're installed from Flathub in a terminal window, so you see every step. Remove them any time in the Ambar Store.
 
 You can come back to it from the **Setup** page in the Automation Center.
 

@@ -183,8 +183,8 @@ dock.lengthMode = "fit";
 dock.floating = true;
 dock.hiding = "dodgewindows";
 
-var launchpad = add(dock, "org.kde.plasma.kickerdash");
-if (launchpad) {
+var launchpad = add(dock, "os.ambar.launchpad");
+if (!launchpad && (launchpad = add(dock, "org.kde.plasma.kickerdash"))) {  // Plasma's own, if ours is missing
     launchpad.currentConfigGroup = ["General"];
     launchpad.writeConfig("icon", "view-app-grid-symbolic");
     launchpad.writeConfig("showRecentApps", "false");   // open on the full app grid
@@ -198,7 +198,8 @@ if (tasks) {
         app(["org.kde.dolphin.desktop"]),                                   // Finder
         app(["firefox.desktop", "org.kde.falkon.desktop"]),                // Browser
         app(["org.kde.kmail2.desktop", "org.kde.kontact.desktop"]),        // Mail
-        app(["org.kde.korganizer.desktop"]),                                // Calendar
+        app(["org.kde.merkuro.calendar.desktop", "org.kde.korganizer.desktop"]),  // Calendar
+        app(["org.kde.marknote.desktop"]),                                  // Notes
         app(["org.kde.elisa.desktop"]),                                     // Music
         app(["org.kde.gwenview.desktop"]),                                  // Photos
         app(["libreoffice-writer.desktop"]),                                // Documents
@@ -247,6 +248,9 @@ SingleClick=false
 
 [kdeglobals][Icons]
 Theme={"Papirus-Dark" if dark else "Papirus"}
+
+[kdeglobals][Sounds]
+Theme=ambar
 
 [plasmarc][Theme]
 name=ambar

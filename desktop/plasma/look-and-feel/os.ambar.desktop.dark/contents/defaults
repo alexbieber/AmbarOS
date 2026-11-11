@@ -16,6 +16,9 @@ SingleClick=false
 [kdeglobals][Icons]
 Theme=Papirus-Dark
 
+[kdeglobals][Sounds]
+Theme=ambar
+
 [plasmarc][Theme]
 name=ambar
 

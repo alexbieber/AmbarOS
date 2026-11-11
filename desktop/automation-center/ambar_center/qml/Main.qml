@@ -981,6 +981,57 @@ ApplicationWindow {
                                 }
                             }
 
+                            Step {
+                                id: appsStep
+                                objectName: "recommendedApps"
+                                number: 5
+                                heading: "Recommended apps (optional)"
+                                detail: "Popular apps that can't come preinstalled. Tick the ones you want; they're installed from Flathub in a terminal window, and you can remove them any time in the Ambar Store."
+                                property var picked: ({})
+                                readonly property int pickedCount: Object.keys(picked).filter(k => picked[k]).length
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 3
+                                    columnSpacing: 12
+                                    rowSpacing: 8
+                                    Repeater {
+                                        model: backend.recommendedApps
+                                        delegate: RowLayout {
+                                            required property var modelData
+                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 1
+                                            spacing: 6
+                                            Check {
+                                                visible: !modelData.installed
+                                                checked: !!appsStep.picked[modelData.id]
+                                                text: modelData.name
+                                                Accessible.name: modelData.name
+                                                onToggled: {
+                                                    const p = Object.assign({}, appsStep.picked);
+                                                    p[modelData.id] = checked;
+                                                    appsStep.picked = p;
+                                                }
+                                            }
+                                            Label2 { visible: modelData.installed; text: modelData.name }
+                                            Pill { visible: modelData.installed; label: "Installed"; tone: t.good }
+                                            Muted { text: modelData.about; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        }
+                                    }
+                                }
+                                RowLayout {
+                                    Btn {
+                                        objectName: "installApps"
+                                        text: appsStep.pickedCount ? "Install " + appsStep.pickedCount + " app" + (appsStep.pickedCount > 1 ? "s" : "") : "Install"
+                                        enabled: appsStep.pickedCount > 0
+                                        onClicked: {
+                                            backend.installApps(Object.keys(appsStep.picked).filter(k => appsStep.picked[k]));
+                                            appsStep.picked = ({});
+                                        }
+                                    }
+                                    Muted { text: "Needs an internet connection." }
+                                }
+                            }
+
                             RowLayout {
                                 Layout.fillWidth: true
                                 Item { Layout.fillWidth: true }

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import shlex
 import subprocess
 import threading
 from datetime import datetime, timezone
@@ -64,6 +65,34 @@ def _ago(ts: Optional[str]) -> str:
     return t.astimezone().strftime("%d %b %H:%M")
 
 
+# Popular apps people install on day one that can't ship in the image (licences) or are
+# large. Installed from Flathub only when chosen on the Welcome screen.
+RECOMMENDED_APPS = [
+    {"id": "com.google.Chrome", "name": "Google Chrome", "about": "Web browser"},
+    {"id": "com.visualstudio.code", "name": "Visual Studio Code", "about": "Code editor"},
+    {"id": "com.spotify.Client", "name": "Spotify", "about": "Music streaming"},
+    {"id": "us.zoom.Zoom", "name": "Zoom", "about": "Video meetings"},
+    {"id": "com.slack.Slack", "name": "Slack", "about": "Team chat"},
+    {"id": "com.discordapp.Discord", "name": "Discord", "about": "Voice and text chat"},
+    {"id": "org.telegram.desktop", "name": "Telegram", "about": "Messaging"},
+    {"id": "org.signal.Signal", "name": "Signal", "about": "Private messaging"},
+    {"id": "org.mozilla.Thunderbird", "name": "Thunderbird", "about": "Mail and calendar"},
+    {"id": "com.valvesoftware.Steam", "name": "Steam", "about": "Games"},
+    {"id": "org.blender.Blender", "name": "Blender", "about": "3D creation"},
+    {"id": "com.bitwarden.desktop", "name": "Bitwarden", "about": "Password manager"},
+]
+
+
+def installed_flatpaks() -> set:
+    if not shutil.which("flatpak"):
+        return set()
+    try:
+        p = subprocess.run(["flatpak", "list", "--app", "--columns=application"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return {line.strip() for line in p.stdout.splitlines() if line.strip()}
+
+
 class Backend(QObject):
     changed = Signal()
     busyChanged = Signal()
@@ -75,6 +104,7 @@ class Backend(QObject):
     def __init__(self, data_dir: Optional[os.PathLike] = None, ambar_bin: Optional[str] = None,
                  poll_ms: int = 2000):
         super().__init__()
+        self._flatpaks: Optional[set] = None  # installed Flatpak apps, read when first needed
         self._data_dir = Path(data_dir) if data_dir else default_data_dir()
         self._ambar = ambar_bin or os.environ.get("AMBAR_BIN") or shutil.which("ambar") or "ambar"
         self._connected = False
@@ -268,6 +298,36 @@ class Backend(QObject):
             lines = (p.stderr or p.stdout).strip().splitlines()
             raise RuntimeError(lines[-1].removeprefix("Error: ") if lines else "failed")
         return p.stdout
+
+    @Property("QVariantList", notify=changed)
+    def recommendedApps(self) -> list:
+        if self._flatpaks is None:
+            self._flatpaks = installed_flatpaks()
+        return [{**a, "installed": a["id"] in self._flatpaks} for a in RECOMMENDED_APPS]
+
+    @Slot("QVariantList")
+    def installApps(self, ids: list) -> None:
+        """Installs the chosen recommended apps from Flathub, in a terminal so every step shows.
+
+        Only IDs from RECOMMENDED_APPS are accepted: this window can't be made to install
+        anything else."""
+        known = [a["id"] for a in RECOMMENDED_APPS]
+        chosen = [i for i in known if i in set(ids)]
+        if not chosen:
+            self.toast.emit("info", "Choose at least one app.")
+            return
+        if not shutil.which("flatpak"):
+            self.toast.emit("error", "Flatpak isn't installed.")
+            return
+        self.run_in_terminal(["flatpak", "install", "--system", "-y", "flathub", *chosen])
+        self._flatpaks = None
+        self.toast.emit("info", f"Installing {len(chosen)} app{'s' if len(chosen) != 1 else ''} in a terminal window")
+
+    @staticmethod
+    def run_in_terminal(argv: list) -> None:
+        term = shutil.which("konsole")
+        cmd = " ".join(shlex.quote(a) for a in argv)
+        subprocess.Popen([term, "--hold", "-e", "sh", "-c", cmd] if term else ["x-terminal-emulator", "-e", "sh", "-c", cmd])
 
     @Property("QVariantList", notify=changed)
     def starterPacks(self) -> list:

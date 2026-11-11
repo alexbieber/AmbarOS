@@ -78,7 +78,11 @@ _Last updated: 2026-11-11_
 - Under software emulation the session took about 7 minutes to draw. The start-up screen ran, but its service hit Plasma's 40-second limit and was stopped. Plasma's own splash runs under the same limit, so this is expected on slow emulation; it hasn't been seen on real hardware.
 - The boot test used to check the layout before Plasma finished writing it (a race that failed once here); it now waits for the Dock.
 - ⚠ Blur behind panels needs a GPU compositor with blur, which wasn't available in these runs.
-- ⚠ Launchpad is still Plasma's own full-screen launcher.
+- ✅ **Launchpad** is now Ambar's own (`os.ambar.launchpad`), seen in the built desktop: every app on 7×5 pages over the blurred desktop, page dots, arrow keys, typing to search. Kicker's own pagination turned out to split by menu category (12 "pages" of one item), so the flat list is paged in QML instead; a test pins that.
+- ✅ Launchpad shows only real apps: helper entries (input-method tools, duplicates, KMail helpers…) are hidden with overrides in `/usr/local/share/applications`, which package upgrades don't undo.
+- ✅ **Day-one apps** (Marknote, Merkuro, GIMP, Krita, Inkscape, Kdenlive, OBS, VLC, Weather, Marble, Clock, Recorder, Font Manager, Kup, six games) were installed in the built desktop and appear in Launchpad. They add about 1.1 GB installed.
+- ✅ **Recommended apps** step in Welcome: the picker and the fixed allow-list are tested (crafted IDs and flags are dropped). ⚠ The Flathub downloads weren't run here (no internet to Flathub).
+- ✅ **Ambar sound theme**: 46 original sounds covering every event of Plasma's own theme, quiet (peak about -14 dBFS), valid Vorbis. ⚠ Not heard: the build machine has no audio.
 
 **Found by booting it, and fixed in the recipe:**
 

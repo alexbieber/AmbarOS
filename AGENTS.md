@@ -18,10 +18,11 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `os/ubuntu/` | **Main OS build**: `build.sh`, `packages.txt`, `exclude.txt`, `hooks/*.chroot`, `overlay/` (files copied into the image), `iso/grub.cfg`, `test-qemu.sh`, `smoke.py`, `desktop-shots.sh` | bash, Python |
 | `os/` (rest) | Experimental **atomic edition** (Fedora Kinoite + bootc, ARM64, Raspberry Pi) and shared test helpers (`smoke_test.py`) | Containerfile, bash |
 | `os/tests/` | Tests for both OS editions (static checks of the recipe, plus the boot harness) | pytest |
-| `desktop/plasma/` | macOS-style shell: `generate.py` (layout, defaults, terminal colours, start-up screen), `desktoptheme.py` (the Ambar Plasma Style: panels, popups, Dock highlights), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
+| `desktop/plasma/` | macOS-style shell: `generate.py` (layout, defaults, terminal colours, start-up screen), `desktoptheme.py` (the Ambar Plasma Style: panels, popups, Dock highlights), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center, Launchpad), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
 | `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
 | `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
+| `desktop/sounds/` | Ambar sound theme and its generator (`generate.py`, needs ffmpeg) | Python |
 | `desktop/share/` | `.desktop` files, autostart, icons; `python/ambar_ui.py`, the shared design for Ambar's Qt Widgets apps | Python |
 | `crates/` | Rust workspace: `ambar-automation` (engine), `ambar-service` (`ambard`), `ambar-cli` (`ambar`), `ambar-ai`, `ambar-pkg`, `ambar-recon` (scanner and the shared scope checker) | Rust |
 | `sdk/python/` | Python SDK for talking to `ambard` | Python |

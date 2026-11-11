@@ -104,7 +104,7 @@ def test_boot_animation():
 
 # ------------------------------------------------------------ macOS-style desktop
 
-WIDGETS = ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter"]
+WIDGETS = ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter", "os.ambar.launchpad"]
 
 
 @pytest.mark.parametrize("wid", WIDGETS)
@@ -145,8 +145,9 @@ def test_layout_is_macos_style():
                                      '"org.kde.plasma.digitalclock"']]
     assert order == sorted(order), "menu bar order: Ambar menu, app name, app menus … tray, control, clock"
     assert 'location = "bottom"' in dock and "floating = true" in dock and 'lengthMode = "fit"' in dock
-    assert dock.index("kickerdash") < dock.index("icontasks") < dock.index("org.kde.plasma.trash")
-    assert '"showRecentApps", "false"' in dock, "Launchpad opens on all apps"
+    assert dock.index("os.ambar.launchpad") < dock.index("icontasks") < dock.index("org.kde.plasma.trash")
+    assert dock.index("os.ambar.launchpad") < dock.index("kickerdash"), "Plasma's menu only as a fallback"
+    assert '"showRecentApps", "false"' in dock, "the fallback also opens on all apps"
     assert "applicationExists" in js, "pinned apps must exist on the system"
     assert "file:///usr/share/wallpapers/Ambar/" in js
 
@@ -203,8 +204,8 @@ def fake_live_console(path, good=True, flavor="standard", sec_broken=False):
             out.append("APP_MISSING libreoffice")
         out += ["BROWSER_OK falkon"]
         out += [f"WIDGET_OK {w}" for w in ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter",
-                                           "org.kde.plasma.kickerdash", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
-        out += ["STYLE_OK", "TERMINAL_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
+                                           "os.ambar.launchpad", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
+        out += ["STYLE_OK", "TERMINAL_OK", "SOUNDS_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
                 '{"wifi": null, "volume": {"value": 40, "muted": false}}', "SEC_CLI_OK"]
         if flavor == "security":
             out += ["FLAVOR_SECURITY", "SEC_TOOL_OK nmap", "SEC_TOOL_OK nuclei"]
@@ -339,3 +340,30 @@ def test_boot_script_runs_without_an_install_disk():
     bare = [l for l in script.splitlines() if re.search(r"\$TARGET_DISK\b|\$\{TARGET_DISK\}", l)
             and "TARGET_DISK:+" not in l and not l.lstrip().startswith("#")]
     assert not bare, "use ${TARGET_DISK:-} (or :+ / :?) so the ISO test works without a disk"
+
+
+def test_launchpad_lists_every_app_in_pages():
+    qml = (PLASMA / "plasmoids/os.ambar.launchpad/contents/ui/main.qml").read_text()
+    assert "import org.kde.plasma.private.kicker as Kicker" in qml
+    # Kicker's own pagination splits by menu category, not into pages of apps (seen in the
+    # desktop: 12 "pages" of one item), so the flat "All Applications" list is paged here.
+    assert "paginate" not in qml and "showAllApps: true" in qml and "rootModel.modelForRow(0)" in qml
+    assert "Kicker.DashboardWindow" in qml and "Kicker.RunnerModel" in qml and "krunner_services" in qml
+    assert "onKeyEscapePressed" in qml and "Keys.onReturnPressed" in qml
+
+
+def test_launchpad_hides_helper_entries():
+    hook = (U / "hooks" / "45-tidy-menu.chroot").read_text()
+    assert "/usr/local/share/applications" in hook and "NoDisplay=true" in hook
+    for f in ("im-config.desktop", "org.fcitx.fcitx5-migrator.desktop", "kdesystemsettings.desktop",
+              "display-im7.q16.desktop", "org.kubuntu.manage-software.desktop"):
+        assert f in hook, f
+
+
+def test_day_one_apps_and_sounds():
+    pk = set(listfile(U / "packages.txt"))
+    assert {"marknote", "merkuro", "gimp", "krita", "inkscape", "kdenlive", "obs-studio", "vlc", "kweather",
+            "marble", "kclock", "krecorder", "kup-backup", "kpat", "kmines"} <= pk
+    assert not {"kpat", "kmines", "ksudoku", "kmahjongg"} & set(listfile(U / "exclude.txt")), "games aren't excluded"
+    js = (PLASMA / "look-and-feel/os.ambar.desktop/contents/layouts/org.kde.plasma.desktop-layout.js").read_text()
+    assert "org.kde.marknote.desktop" in js and "org.kde.merkuro.calendar.desktop" in js

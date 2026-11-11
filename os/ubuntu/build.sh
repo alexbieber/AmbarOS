@@ -168,6 +168,7 @@ ambar() {
   cp -r "$REPO"/desktop/plasma/plasmoids/* "$ROOT/usr/share/plasma/plasmoids/"
   install -d "$ROOT/usr/share/konsole" "$ROOT/usr/share/plasma/desktoptheme"
   cp "$REPO"/desktop/plasma/konsole/* "$ROOT/usr/share/konsole/"
+  rm -rf "$ROOT/usr/share/sounds/ambar" && cp -r "$REPO/desktop/sounds/ambar" "$ROOT/usr/share/sounds/"
   rm -rf "$ROOT/usr/share/plasma/desktoptheme/ambar"
   cp -r "$REPO/desktop/plasma/desktoptheme/ambar" "$ROOT/usr/share/plasma/desktoptheme/"
   install -Dm755 "$REPO/desktop/plasma/control-center/ambar-control-center" "$ROOT/usr/bin/ambar-control-center"
