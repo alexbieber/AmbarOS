@@ -29,8 +29,11 @@ pub async fn approval(cmd: &ApprovalCmd, paths: &ServicePaths) -> Result<i32> {
                 println!("Nothing is waiting for your approval.");
             }
             for a in list {
-                println!("{}  {} wants to {}
-  (auto-denied at {})", a.id, a.workflow_id, a.description, a.expires_at);
+                println!(
+                    "{}  {} wants to {}
+  (auto-denied at {})",
+                    a.id, a.workflow_id, a.description, a.expires_at
+                );
             }
         }
         ApprovalCmd::Allow { id } => {

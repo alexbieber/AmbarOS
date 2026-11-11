@@ -104,11 +104,23 @@ def fake_console(path, good=True):
             data += c.recv(65536)
         out = [
             "__BEGIN__", 'PRETTY_NAME="Ambar OS 0.1 (Fedora 45)"', "ambar 0.1.0", "active",
-            "ambard is running (ok)" if good else "ambard is not running",
+            "ambard is running (ok)",
             "dev.ambar.daily-notes 1.0.0  — Starts a dated notes file",
             "2026-11-11 10:00:00  succeeded  smoke  1a2b3c4d  manual", "ok", "__END__",
         ]
         c.sendall(("\r\n".join(out) + "\r\n").encode())
+        data = b""
+        while b"echo __DEND__" not in data:
+            chunk = c.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+        dout = ["__DBEGIN__", "PLASMA_OK", "WELCOME_OK",
+                'a(sssida{sv}) 1 "create:tidy my desktop" "Create an automation: tidy my desktop"',
+                "os.ambar.desktop", "os.ambar.desktop.dark", "__DEND__"]
+        if not good:
+            dout.remove("WELCOME_OK")
+        c.sendall(("\r\n".join(dout) + "\r\n").encode())
         c.close()
 
     threading.Thread(target=serve, daemon=True).start()
@@ -123,4 +135,6 @@ def test_smoke_harness(tmp_path, good, capsys):
     assert code == (0 if good else 1)
     out = capsys.readouterr().out
     assert ("PASSED" in out) == good
+    if not good:
+        assert "welcome autostart" in out
     assert "ambar-os login:" in (tmp_path / "serial.log").read_text()

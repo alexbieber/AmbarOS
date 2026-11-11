@@ -208,7 +208,7 @@ not duplicate the existing ones. Reply with only a JSON array of objects with \
 pub fn parse_suggestions(reply: &str) -> Result<Vec<Suggestion>, AiError> {
     let start = reply.find('[');
     let end = reply.rfind(']');
-    let (Some(s), Some(e)) = (start, end) else {
+    let (Some(s), Some(e)) = (start, end.filter(|e| Some(*e) > start)) else {
         return Err(AiError::Generation(
             "the model did not return a list of suggestions".into(),
         ));
@@ -244,6 +244,8 @@ mod tests {
         )?;
         assert_eq!(s.len(), 1);
         assert!(parse_suggestions("no").is_err());
+        // Found by property testing: `]` before `[` used to panic.
+        assert!(parse_suggestions("] then [").is_err());
         Ok(())
     }
 

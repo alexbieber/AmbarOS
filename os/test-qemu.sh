@@ -30,7 +30,11 @@ QEMU=(qemu-system-x86_64 -machine "q35,accel=$ACCEL" -cpu "$CPU" -m 4096 -smp 4
 if [ "$MODE" = "--interactive" ]; then
   exec "${QEMU[@]}" -device virtio-vga -display gtk
 fi
-"${QEMU[@]}" -display none -serial "unix:$WORK/serial.sock,server,nowait" &
+"${QEMU[@]}" -device virtio-vga -display none \
+  -serial "unix:$WORK/serial.sock,server,nowait" \
+  -monitor "unix:$WORK/monitor.sock,server,nowait" &
 QPID=$!
 for _ in $(seq 50); do [ -S "$WORK/serial.sock" ] && break; sleep 0.2; done
-python3 os/smoke_test.py "$WORK/serial.sock" --log "${SERIAL_LOG:-output/serial.log}"
+SHOT="$(realpath -m "${SCREENSHOT:-output/desktop.png}")"
+python3 os/smoke_test.py "$WORK/serial.sock" --log "${SERIAL_LOG:-output/serial.log}" \
+  --monitor "$WORK/monitor.sock" --screenshot "$SHOT" ${SMOKE_ARGS:-}

@@ -53,7 +53,10 @@ pub struct ApprovalBroker {
 fn new_id() -> String {
     let mut b = [0u8; 4];
     let _ = getrandom::fill(&mut b);
-    format!("appr-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+    format!(
+        "appr-{}",
+        b.iter().map(|x| format!("{x:02x}")).collect::<String>()
+    )
 }
 
 impl ApprovalBroker {
@@ -120,14 +123,23 @@ impl Approver for ApprovalBroker {
         let (tx, rx) = channel();
         match self.pending.lock() {
             Ok(mut p) => {
-                p.insert(info.id.clone(), Slot { info: info.clone(), reply: tx });
+                p.insert(
+                    info.id.clone(),
+                    Slot {
+                        info: info.clone(),
+                        reply: tx,
+                    },
+                );
             }
             Err(_) => return false,
         }
         let _ = self.store.audit(
             &info.workflow_id,
             "approval.requested",
-            &format!("approval={} action={} {}", info.id, info.action, info.description),
+            &format!(
+                "approval={} action={} {}",
+                info.id, info.action, info.description
+            ),
         );
         let _ = self.notifier.notify(&Notification {
             workflow_id: info.workflow_id.clone(),

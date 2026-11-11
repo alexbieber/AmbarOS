@@ -163,7 +163,11 @@ pub async fn start(config: DaemonConfig) -> Result<RunningDaemon, DaemonError> {
         .map(|r| r.iter().filter(|e| e.status.as_str() == "running").count())
         .unwrap_or(0);
     let broker = config.live_approvals.map(|timeout| {
-        Arc::new(ApprovalBroker::new(timeout, config.notifier.clone(), store.clone()))
+        Arc::new(ApprovalBroker::new(
+            timeout,
+            config.notifier.clone(),
+            store.clone(),
+        ))
     });
     let approver: Arc<dyn ambar_automation::Approver> = match &broker {
         Some(b) => b.clone(),
@@ -765,9 +769,9 @@ fn agent_request(shared: &Shared, principal: &Principal, request: Request) -> Re
             }
         }
         Request::AgentList => ok_or(agents.list()),
-        Request::ApprovalList => Response::ok(
-            shared.broker.as_ref().map(|b| b.list()).unwrap_or_default(),
-        ),
+        Request::ApprovalList => {
+            Response::ok(shared.broker.as_ref().map(|b| b.list()).unwrap_or_default())
+        }
         Request::ApprovalDecide { id, allow } => match &shared.broker {
             None => Response::err(ErrorCode::State, "live approvals are not enabled"),
             Some(b) => match b.decide(&id, allow) {

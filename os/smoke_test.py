@@ -38,6 +38,26 @@ cat ~/smoke/out.txt; echo
 echo __END__
 """
 
+# Phase 2: log the test user into Plasma and check the desktop integration.
+DESKTOP_SCRIPT = r"""
+echo __DBEGIN__
+echo ambar | sudo -S sh -c 'mkdir -p /etc/sddm.conf.d && printf "[Autologin]\nUser=ambar\nSession=plasma\n" > /etc/sddm.conf.d/zz-smoke.conf && systemctl restart sddm' 2>/dev/null
+for i in $(seq 120); do pgrep -u ambar -x plasmashell >/dev/null && break; sleep 2; done
+pgrep -u ambar -x plasmashell >/dev/null && echo PLASMA_OK
+sleep 20
+pgrep -u ambar -f "ambar-center --welcome" >/dev/null && echo WELCOME_OK
+busctl --user call os.ambar.KRunner /runner org.kde.krunner1 Match s "automate tidy my desktop" 2>&1 | head -c 400; echo
+plasma-apply-lookandfeel --list 2>/dev/null | grep os.ambar
+echo __DEND__
+"""
+
+DESKTOP_EXPECT = [
+    ("plasma session", r"^PLASMA_OK\s*$"),
+    ("welcome autostart", r"^WELCOME_OK\s*$"),
+    ("krunner runner", r"Create an automation: tidy my desktop"),
+    ("ambar look-and-feel", r"^os\.ambar\.desktop\s*$"),
+]
+
 EXPECT = [
     ("branding", r'PRETTY_NAME="Ambar OS'),
     ("cli", r"ambar \d+\.\d+\.\d+"),
@@ -88,7 +108,21 @@ class Serial:
         self.sock.sendall(text.encode())
 
 
-def run(path, log=None, boot_timeout=900):
+def screendump(monitor, out):
+    """Saves the VM screen as PNG through the QEMU monitor."""
+    m = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    m.connect(monitor)
+    m.settimeout(5)
+    try:
+        m.recv(4096)
+    except socket.timeout:
+        pass
+    m.sendall(f"screendump {out} -f png\n".encode())
+    time.sleep(3)
+    m.close()
+
+
+def run(path, log=None, boot_timeout=900, monitor=None, screenshot=None, desktop=True):
     s = Serial(path, log)
     s.read_until(r"login:\s*$", boot_timeout)
     s.send(USER + "\n")
@@ -100,10 +134,21 @@ def run(path, log=None, boot_timeout=900):
     out = out[out.find("__BEGIN__"):]
     failed = [name for name, rx in EXPECT if not re.search(rx, out, re.M)]
     print(out)
+    checks = list(EXPECT)
+    if desktop:
+        s.send(DESKTOP_SCRIPT.strip() + "\n")
+        dout = s.read_until(r"^__DEND__\s*$", 600)
+        dout = dout[dout.find("__DBEGIN__"):]
+        print(dout)
+        failed += [name for name, rx in DESKTOP_EXPECT if not re.search(rx, dout, re.M)]
+        checks += DESKTOP_EXPECT
+        if monitor and screenshot:
+            screendump(monitor, screenshot)
+            print(f"screenshot: {screenshot}")
     if failed:
         print("SMOKE TEST FAILED:", ", ".join(failed))
         return 1
-    print("SMOKE TEST PASSED:", ", ".join(n for n, _ in EXPECT))
+    print("SMOKE TEST PASSED:", ", ".join(n for n, _ in checks))
     return 0
 
 
@@ -112,5 +157,8 @@ if __name__ == "__main__":
     ap.add_argument("socket")
     ap.add_argument("--log")
     ap.add_argument("--boot-timeout", type=int, default=900)
+    ap.add_argument("--monitor", help="QEMU monitor socket (for the desktop screenshot)")
+    ap.add_argument("--screenshot", help="where to save the desktop screenshot (PNG)")
+    ap.add_argument("--no-desktop", action="store_true", help="skip the graphical-session checks")
     a = ap.parse_args()
-    sys.exit(run(a.socket, a.log, a.boot_timeout))
+    sys.exit(run(a.socket, a.log, a.boot_timeout, a.monitor, a.screenshot, not a.no_desktop))

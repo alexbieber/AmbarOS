@@ -27,6 +27,7 @@ globset = "0.4"
 humantime = "2.4"
 notify = "8"
 rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
+proptest = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "system-proxy"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }

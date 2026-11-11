@@ -294,7 +294,11 @@ impl Client {
     }
     /// Owner: allow or deny a waiting sensitive action.
     pub async fn decide(&mut self, id: &str, allow: bool) -> Result<PendingApproval, ClientError> {
-        self.call(&Request::ApprovalDecide { id: id.into(), allow }).await
+        self.call(&Request::ApprovalDecide {
+            id: id.into(),
+            allow,
+        })
+        .await
     }
     /// Owner: revoke an agent.
     pub async fn agent_revoke(&mut self, id: &str) -> Result<Agent, ClientError> {
