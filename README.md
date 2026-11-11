@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/brand/ambar-os-logo.png" alt="Ambar OS" width="420"></p>
+
 # Ambar OS
 
 **Designed for Humans. Built for AI. Open to Everyone.**
@@ -10,7 +12,7 @@ the openness of Linux, and automation built in from the start. See
 
 The full Ambar software stack is built and tested: automation engine, background service with live approvals, AI automation builder, agent runtime, Automation Center desktop app (with first-run Welcome), KRunner search, Plasma theme, SDK, packages and marketplace. **The bootable OS image is written but has not been built or booted yet.** That happens in CI (`os-image` workflow). Everything has been tested on Linux; macOS is untested.
 
-163 automated tests pass, plus ~30,000 property-test cases. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
+164 automated tests pass, plus ~30,000 property-test cases. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
 
 ![Automation Center](docs/images/automation-center.png)
 

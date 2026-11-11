@@ -17,7 +17,7 @@ The full Ambar software stack is built and tested on Linux:
 The bootable OS image is **written but has never been built or booted**. That needs a machine with Fedora registry access and KVM: the `os-image` CI job, which runs on GitHub as soon as the repo is pushed, or a Linux PC.
 
 **What is proven and what isn't:**
-- **Proven:** the software, by 163 automated tests and ~30,000 property-test cases.
+- **Proven:** the software, by 164 automated tests and ~30,000 property-test cases.
 - **Not proven:** that the OS boots on any machine. The CI boot test is written to prove it: login, service, marketplace, a real workflow run, Plasma, Welcome and KRunner, plus a desktop screenshot.
 
 | Phase | What | Status |
@@ -38,9 +38,9 @@ The bootable OS image is **written but has never been built or booted**. That ne
 | Python SDK against a real `ambard` | 4 |
 | Automation Center: real `ambard`, offscreen QML, both themes, AI drafts, live approvals, Welcome, starter packs | 9 |
 | KRunner runner: matching + real D-Bus session bus | 2 |
-| Plasma theme, desktop entries, KRunner/autostart registration | 9 |
+| Plasma theme, desktop entries, KRunner/autostart registration, brand logo assets | 10 |
 | OS recipe: COPY sources, configs, systemd unit, shellcheck, branding, boot smoke harness (pass and fail) | 8 |
-| **Total** | **163**: 3 consecutive full runs plus 6 runs under double load, all green |
+| **Total** | **164**: 3 consecutive full runs plus 6 runs under double load, all green |
 
 Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `cargo audit`, `shellcheck`, `desktop-file-validate`, `systemd-analyze verify`, WCAG AA contrast.
 

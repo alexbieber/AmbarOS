@@ -20,4 +20,4 @@ ambar-krunner = "ambar_center.krunner:main"
 packages = ["ambar_center"]
 
 [tool.setuptools.package-data]
-ambar_center = ["qml/*.qml", "icon.svg"]
+ambar_center = ["qml/*.qml", "icon.svg", "mark.svg"]

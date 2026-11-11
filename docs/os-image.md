@@ -23,7 +23,7 @@ os/
 - **Search:** typing in KRunner (Alt+Space) finds and runs automations, drafts new ones ("automate …"), and shows waiting approvals. It's a D-Bus runner, activated on demand.
 - **First login:** the Welcome setup opens once and covers the service, appearance, AI and starter automations.
 - **Marketplace:** the bundled marketplace is at `/usr/share/ambar/marketplace`, and `ambar pkg search` uses it by default. Publishers still have to be trusted explicitly.
-- **Branding:** `NAME`, `PRETTY_NAME`, `VARIANT` and `IMAGE_ID`. `ID=fedora` and `VERSION_ID` are kept so dnf, toolbox and bootc keep working.
+- **Branding:** the Ambar logo (`desktop/brand/`) is the launcher icon, the About-this-system logo and the Automation Center icon. In os-release: `NAME`, `PRETTY_NAME`, `VARIANT` and `IMAGE_ID`. `ID=fedora` and `VERSION_ID` are kept so dnf, toolbox and bootc keep working.
 
 ## Build
 
