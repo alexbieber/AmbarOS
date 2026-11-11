@@ -43,6 +43,7 @@ done
 grep -h '^\(Name\|Exec\)=' /usr/share/applications/org.kde.discover.desktop | head -2
 grep -qs '^name=ambar' ~/.config/plasmarc /etc/xdg/plasmarc && [ -f /usr/share/plasma/desktoptheme/ambar/metadata.json ] && echo STYLE_OK
 [ -f /usr/share/sounds/ambar/stereo/desktop-login.oga ] && echo SOUNDS_OK
+[ -f /usr/share/icons/Ambar/apps/scalable/org.kde.dolphin.svg ] && [ -f /usr/share/icons/Ambar-Dark/places/48x48/folder.svg ] && echo ICONS_OK
 for a in marknote gimp krita inkscape kdenlive obs vlc kweather kclock krecorder; do command -v "$a" >/dev/null || echo "APP_MISSING $a"; done
 [ -f /usr/share/konsole/Ambar.profile ] && grep -qs Ambar.profile /etc/xdg/konsolerc && echo TERMINAL_OK
 flatpak remotes --system 2>/dev/null | grep -q flathub && echo FLATHUB_OK
@@ -73,6 +74,7 @@ EXPECT = [
     ("ambar plasma style", r"^STYLE_OK"),
     ("ambar terminal", r"^TERMINAL_OK"),
     ("ambar sounds", r"^SOUNDS_OK"),
+    ("ambar icons", r"^ICONS_OK"),
     ("browser", r"^BROWSER_OK "),
     ("ambar store", r"^Name=Ambar Store"),
     ("installer", r"^APP_OK calamares"),

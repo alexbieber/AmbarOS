@@ -66,7 +66,7 @@ def test_desktop_defaults_hook():
     assert "LookAndFeelPackage=os.ambar.desktop" in h
     assert "DefaultDarkLookAndFeel=os.ambar.desktop.dark" in h
     assert "theme=__aurorae__svg__Ambar" in h and "ButtonsOnLeft=XIA" in h
-    assert "Theme=Papirus" in h and "font=Inter" in h
+    assert "Theme=Ambar" in h and "font=Inter" in h
     assert "_launch=Meta+Space" in h, "Spotlight-style search on Meta+Space"
     assert "Name=Ambar Store" in h
     assert "flathub" in h and "ambar-flathub.service" in h
@@ -178,7 +178,7 @@ def test_window_decoration_themes():
 
 def test_dark_variant_switches_decoration_and_icons():
     d = (PLASMA / "look-and-feel/os.ambar.desktop.dark/contents/defaults").read_text()
-    assert "theme=__aurorae__svg__AmbarDark" in d and "Theme=Papirus-Dark" in d
+    assert "theme=__aurorae__svg__AmbarDark" in d and "Theme=Ambar-Dark" in d
 
 
 # ------------------------------------------------------------ ISO boot test harness
@@ -205,7 +205,7 @@ def fake_live_console(path, good=True, flavor="standard", sec_broken=False):
         out += ["BROWSER_OK falkon"]
         out += [f"WIDGET_OK {w}" for w in ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter",
                                            "os.ambar.launchpad", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
-        out += ["STYLE_OK", "TERMINAL_OK", "SOUNDS_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
+        out += ["STYLE_OK", "TERMINAL_OK", "SOUNDS_OK", "ICONS_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
                 '{"wifi": null, "volume": {"value": 40, "muted": false}}', "SEC_CLI_OK"]
         if flavor == "security":
             out += ["FLAVOR_SECURITY", "SEC_TOOL_OK nmap", "SEC_TOOL_OK nuclei"]

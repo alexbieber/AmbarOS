@@ -29,7 +29,7 @@ widgetStyle=Breeze
 AnimationDurationFactor=0.7
 
 [Icons]
-Theme=Papirus
+Theme=Ambar
 
 [Sounds]
 Theme=ambar
@@ -66,7 +66,7 @@ for v in 3.0 4.0; do
   cat > "/etc/gtk-$v/settings.ini" <<'CFG'
 [Settings]
 gtk-theme-name=Breeze
-gtk-icon-theme-name=Papirus
+gtk-icon-theme-name=Ambar
 gtk-cursor-theme-name=breeze_cursors
 gtk-font-name=Inter 10
 gtk-xft-antialias=1
@@ -81,7 +81,7 @@ done
 install -d /etc/gtk-2.0
 cat > /etc/gtk-2.0/gtkrc <<'CFG'
 gtk-theme-name="Breeze"
-gtk-icon-theme-name="Papirus"
+gtk-icon-theme-name="Ambar"
 gtk-font-name="Inter 10"
 CFG
 

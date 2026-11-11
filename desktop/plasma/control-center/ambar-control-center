@@ -192,7 +192,7 @@ def appearance(dark_on: bool) -> int:
     code = run("plasma-apply-lookandfeel", "-a", pkg, timeout=30)[0]
     run("plasma-apply-colorscheme", "AmbarDark" if dark_on else "AmbarLight", timeout=20)
     run("plasma-apply-desktoptheme", "ambar", timeout=20)  # one Plasma Style; it follows the colours
-    run(libexec("plasma-changeicons"), "Papirus-Dark" if dark_on else "Papirus", timeout=20)
+    run(libexec("plasma-changeicons"), "Ambar-Dark" if dark_on else "Ambar", timeout=20)
     run(libexec("plasma-apply-aurorae"), "__aurorae__svg__AmbarDark" if dark_on else "__aurorae__svg__Ambar", timeout=20)
     return code
 

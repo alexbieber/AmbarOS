@@ -82,6 +82,7 @@ _Last updated: 2026-11-11_
 - ✅ Launchpad shows only real apps: helper entries (input-method tools, duplicates, KMail helpers…) are hidden with overrides in `/usr/local/share/applications`, which package upgrades don't undo.
 - ✅ **Day-one apps** (Marknote, Merkuro, GIMP, Krita, Inkscape, Kdenlive, OBS, VLC, Weather, Marble, Clock, Recorder, Font Manager, Kup, six games) were installed in the built desktop and appear in Launchpad. They add about 1.1 GB installed.
 - ✅ **Recommended apps** step in Welcome: the picker and the fixed allow-list are tested (crafted IDs and flags are dropped). ⚠ The Flathub downloads weren't run here (no internet to Flathub).
+- ✅ **Icons** (`desktop/icons/ambar-icons`): the Ambar and Ambar-Dark icon themes give every app shown in Launchpad the same squircle tile (icons that are already tiles are clipped to the same shape; others sit on a tint of their own colour), with amber folders. Menus and title bars keep Papirus's small drawings. Seen in the Dock, Launchpad and Files in both modes. Rebuilt after APT installs and when Flatpak apps change; ⚠ the Flatpak path wasn't exercised here.
 - ✅ **Ambar sound theme**: 46 original sounds covering every event of Plasma's own theme, quiet (peak about -14 dBFS), valid Vorbis. ⚠ Not heard: the build machine has no audio.
 
 **Found by booting it, and fixed in the recipe:**

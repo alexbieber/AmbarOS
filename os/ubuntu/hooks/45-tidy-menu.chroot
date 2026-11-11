@@ -30,3 +30,17 @@ for f in "${HIDE[@]}"; do
   [ -f "$src" ] || continue
   sed '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$src" > "/usr/local/share/applications/$f"
 done
+
+# Apps whose launcher points at a small symbolic icon get a full-colour one, so Launchpad
+# can show them on a tile like everything else.
+ICONS=(
+  "org.kubuntu.driver-manager.desktop:jockey"   # Driver Manager
+)
+for entry in "${ICONS[@]}"; do
+  f=${entry%%:*} icon=${entry#*:}
+  src=/usr/local/share/applications/$f
+  [ -f "$src" ] || src=/usr/share/applications/$f
+  [ -f "$src" ] || continue
+  sed "s/^Icon=.*/Icon=$icon/" "$src" > "/usr/local/share/applications/$f.tmp"
+  mv "/usr/local/share/applications/$f.tmp" "/usr/local/share/applications/$f"
+done

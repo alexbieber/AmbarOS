@@ -101,8 +101,8 @@ def test_toggles_round_trip(env):
     assert "reconfigure" in (state / "busctl.log").read_text(), "night light must reload KWin"
     log = (state / "appearance.log").read_text().split("\n")
     # dark on, then off: every part of the desktop is switched each time
-    assert log[:4] == ["colors AmbarDark", "plasma ambar", "icons Papirus-Dark", "decoration __aurorae__svg__AmbarDark"]
-    assert log[4:8] == ["colors AmbarLight", "plasma ambar", "icons Papirus", "decoration __aurorae__svg__Ambar"]
+    assert log[:4] == ["colors AmbarDark", "plasma ambar", "icons Ambar-Dark", "decoration __aurorae__svg__AmbarDark"]
+    assert log[4:8] == ["colors AmbarLight", "plasma ambar", "icons Ambar", "decoration __aurorae__svg__Ambar"]
 
 
 def test_sliders(env):

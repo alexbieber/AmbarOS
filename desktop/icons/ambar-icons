@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""ambar-icons: builds the Ambar icon themes (Ambar and Ambar-Dark) on top of Papirus.
+
+macOS puts every app icon on the same rounded-square ("squircle") tile, so a Dock or
+Launchpad full of icons from different designers still looks like one set. This does
+the same for the apps installed on this computer:
+
+  - an icon that is already a full tile (a rounded square) is used as it is, at tile size;
+  - any other icon (a shield, a cone, a mascot…) is placed on a squircle whose colour is
+    a soft tint of the icon's own main colour.
+
+Folders use Papirus's amber folders. Everything else (symbolic, devices, mimetypes) comes
+from Papirus through `Inherits`, so nothing is lost.
+
+    ambar-icons build [--root /] [--out /usr/share/icons]   # both themes, for every visible app
+    ambar-icons update                                      # same; run after apps are installed
+
+Runs inside the image at build time, and again after APT installs packages, so new apps
+get matching icons too.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import configparser
+import math
+import os
+import re
+import shutil
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+SVG_NS = "http://www.w3.org/2000/svg"
+for prefix, uri in {"": SVG_NS, "xlink": "http://www.w3.org/1999/xlink",
+                    "sodipodi": "http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd",
+                    "inkscape": "http://www.inkscape.org/namespaces/inkscape"}.items():
+    ET.register_namespace(prefix, uri)
+
+SIZE = 128
+TILE = (4.0, 4.0, 120.0, 120.0)        # x, y, w, h of the squircle inside the 128 canvas
+GLYPH = 0.70                           # a free-standing icon fills this much of the tile
+FOLDER_COLOUR = "orange"               # Papirus folder variant closest to the Ambar amber
+# Apps whose own icon Qt can't draw properly; Papirus has a good one under another name.
+ALIASES = {"com.github.FontManager.FontManager": "preferences-desktop-font"}
+THEMES = {
+    "Ambar": {"inherits": "Papirus,breeze,hicolor", "base": "Papirus", "mode": "light"},
+    "Ambar-Dark": {"inherits": "Papirus-Dark,breeze-dark,hicolor", "base": "Papirus-Dark", "mode": "dark"},
+}
+
+
+# ------------------------------------------------------------------ geometry and colour
+
+def squircle(x: float, y: float, w: float, h: float, n: float = 5.0, steps: int = 96) -> str:
+    """A superellipse |x|^n + |y|^n = 1: the continuous-curvature shape of macOS icons."""
+    cx, cy, rx, ry = x + w / 2, y + h / 2, w / 2, h / 2
+    pts = []
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        c, s = math.cos(t), math.sin(t)
+        px = cx + rx * math.copysign(abs(c) ** (2 / n), c)
+        py = cy + ry * math.copysign(abs(s) ** (2 / n), s)
+        pts.append(f"{px:.2f},{py:.2f}")
+    return "M " + " L ".join(pts) + " Z"
+
+
+def mix(a: tuple, b: tuple, t: float) -> tuple:
+    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def hexc(c: tuple) -> str:
+    return "#%02x%02x%02x" % c
+
+
+# ------------------------------------------------------------------ reading icons
+
+def find_icon(name: str, root: Path, base: str) -> Path | None:
+    if name.startswith("/"):
+        p = root / name.lstrip("/")
+        return p if p.exists() else None
+    icons = root / "usr/share/icons"
+    for d in [f"{base}/64x64/apps", f"{base}/48x48/apps", "Papirus/64x64/apps", "hicolor/scalable/apps",
+              "hicolor/256x256/apps", "hicolor/128x128/apps", "hicolor/64x64/apps", "hicolor/48x48/apps",
+              "breeze/apps/48"]:
+        for ext in (".svg", ".png"):
+            p = icons / d / f"{name}{ext}"
+            if p.exists():
+                return p.resolve()
+    flat = root / "var/lib/flatpak/exports/share/icons/hicolor"
+    for d in ("scalable/apps", "256x256/apps", "128x128/apps", "64x64/apps"):
+        for ext in (".svg", ".png"):
+            p = flat / d / f"{name}{ext}"
+            if p.exists():
+                return p.resolve()
+    p = root / "usr/share/pixmaps" / f"{name}.png"
+    return p if p.exists() else None
+
+
+def analyse(path: Path) -> tuple[bool, tuple]:
+    """(is the icon already a full tile?, its main colour)."""
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter
+    from PySide6.QtSvg import QSvgRenderer
+    QGuiApplication.instance() or QGuiApplication(["ambar-icons"])
+    img = QImage(64, 64, QImage.Format.Format_ARGB32)
+    img.fill(Qt.GlobalColor.transparent)
+    p = QPainter(img)
+    if path.suffix == ".svg":
+        QSvgRenderer(str(path)).render(p, QRectF(0, 0, 64, 64))
+    else:
+        p.drawImage(QRectF(0, 0, 64, 64), QImage(str(path)))
+    p.end()
+    opaque, inner, total_inner = 0, 0, 0
+    acc, weight = [0.0, 0.0, 0.0], 0.0
+    for y in range(64):
+        for x in range(64):
+            c = QColor.fromRgba(img.pixel(x, y))
+            a = c.alphaF()
+            if 8 <= x < 56 and 8 <= y < 56:
+                total_inner += 1
+                inner += a > 0.5
+            if a > 0.5:
+                opaque += 1
+                sat = c.hsvSaturationF()
+                w = a * (0.15 + sat)
+                acc[0] += c.red() * w
+                acc[1] += c.green() * w
+                acc[2] += c.blue() * w
+                weight += w
+    # A tile covers nearly all of its middle and most of the canvas.
+    is_tile = inner / total_inner > 0.97 and opaque / 4096 > 0.72
+    colour = tuple(round(v / weight) for v in acc) if weight else (128, 128, 128)
+    return is_tile, colour
+
+
+def inline_svg(path: Path, x: float, y: float, size: float) -> str:
+    """The icon's own drawing, moved and scaled into place (Qt's SVG renderer doesn't do nested <svg>)."""
+    tree = ET.parse(path)
+    svg = tree.getroot()
+    vb = svg.get("viewBox")
+    if vb:
+        vx, vy, vw, vh = (float(v) for v in re.split(r"[ ,]+", vb.strip()))
+    else:
+        vx = vy = 0.0
+        vw = float(re.sub(r"[^0-9.]", "", svg.get("width", "64")) or 64)
+        vh = float(re.sub(r"[^0-9.]", "", svg.get("height", "64")) or 64)
+    s = size / max(vw, vh)
+    ox = x + (size - vw * s) / 2 - vx * s
+    oy = y + (size - vh * s) / 2 - vy * s
+    body = "".join(ET.tostring(child, encoding="unicode") for child in svg
+                   if not child.tag.endswith(("metadata", "namedview")))
+    return f'<g transform="translate({ox:.3f},{oy:.3f}) scale({s:.5f})">{body}</g>'
+
+
+def clipped_png(path: Path, x: float, y: float, size: float) -> str:
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, Qt
+    from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPainterPath
+    from PySide6.QtSvg import QSvgRenderer
+    QGuiApplication.instance() or QGuiApplication(["ambar-icons"])
+    px = int(size * 2)
+    img = QImage(px, px, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(Qt.GlobalColor.transparent)
+    p = QPainter(img)
+    p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
+    clip = QPainterPath()
+    pts = [tuple(float(v) for v in xy.split(",")) for xy in squircle(0, 0, px, px)[2:-2].split(" L ")]
+    clip.moveTo(*pts[0])
+    for pt in pts[1:]:
+        clip.lineTo(*pt)
+    clip.closeSubpath()
+    p.setClipPath(clip)
+    # Slightly larger than the clip, so the icon's own rounded corners are cut away.
+    over = px * 0.06
+    target = QRectF(-over, -over, px + 2 * over, px + 2 * over)
+    if path.suffix == ".svg":
+        QSvgRenderer(str(path)).render(p, target)
+    else:
+        p.drawImage(target, QImage(str(path)))
+    p.end()
+    buf = QByteArray()
+    io = QBuffer(buf)
+    io.open(QIODevice.OpenModeFlag.WriteOnly)
+    img.save(io, "PNG")
+    data = base64.b64encode(bytes(buf)).decode()
+    return (f'<image x="{x:.2f}" y="{y:.2f}" width="{size:.2f}" height="{size:.2f}" '
+            f'xlink:href="data:image/png;base64,{data}"/>')
+
+
+def inline_png(path: Path, x: float, y: float, size: float) -> str:
+    data = base64.b64encode(path.read_bytes()).decode()
+    return (f'<image x="{x:.2f}" y="{y:.2f}" width="{size:.2f}" height="{size:.2f}" '
+            f'xlink:href="data:image/png;base64,{data}"/>')
+
+
+# ------------------------------------------------------------------ drawing
+
+def tile_icon(src: Path, mode: str) -> str:
+    is_tile, colour = analyse(src)
+    x, y, w, h = TILE
+    shadow = "".join(
+        f'<path d="{squircle(x - g, y - g + 2.5 + g, w + 2 * g, h + 2 * g)}" fill="#000" fill-opacity="{o}"/>'
+        for g, o in ((0.0, 0.10), (1.2, 0.05), (2.6, 0.03)))
+    if is_tile:
+        # Already a full tile: give it the same squircle outline by clipping it in raster
+        # (Qt's SVG renderer can't clip), at twice the size so it stays sharp.
+        return _svg(shadow + clipped_png(src, x, y, w))
+    white, ink = (255, 255, 255), (24, 20, 16)
+    if mode == "light":
+        top, bottom, rim = mix(white, colour, 0.07), mix(white, colour, 0.20), "#000000"
+        rim_opacity = 0.10
+    else:
+        base = (52, 45, 38)
+        top, bottom, rim = mix(base, colour, 0.22), mix(ink, colour, 0.16), "#FFFFFF"
+        rim_opacity = 0.12
+    g = GLYPH * w
+    art = inline_svg(src, x + (w - g) / 2, y + (h - g) / 2, g) if src.suffix == ".svg" else \
+        inline_png(src, x + (w - g) / 2, y + (h - g) / 2, g)
+    defs = (f'<linearGradient id="ambar-tile" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0" stop-color="{hexc(top)}"/><stop offset="1" stop-color="{hexc(bottom)}"/></linearGradient>')
+    back = (f'{shadow}<path d="{squircle(*TILE)}" fill="url(#ambar-tile)"/>'
+            f'<path d="{squircle(*TILE)}" fill="none" stroke="{rim}" stroke-opacity="{rim_opacity}" stroke-width="1"/>')
+    return _svg(back + art, defs)
+
+
+def _svg(body: str, defs: str = "") -> str:
+    return (f'<svg xmlns="{SVG_NS}" xmlns:xlink="http://www.w3.org/1999/xlink" width="{SIZE}" height="{SIZE}" '
+            f'viewBox="0 0 {SIZE} {SIZE}"><defs>{defs}</defs>{body}</svg>\n')
+
+
+# ------------------------------------------------------------------ which apps
+
+def visible_app_icons(root: Path) -> dict[str, str]:
+    """{icon name: app name} for every app that shows in Launchpad."""
+    out: dict[str, str] = {}
+    seen: set[str] = set()
+    for d in (root / "usr/local/share/applications", root / "usr/share/applications",
+              root / "var/lib/flatpak/exports/share/applications"):
+        for f in sorted(d.glob("*.desktop")) if d.is_dir() else []:
+            if f.name in seen:
+                continue  # an override earlier in the path wins, as in XDG
+            seen.add(f.name)
+            cp = configparser.RawConfigParser(strict=False, interpolation=None)
+            try:
+                cp.read(f, encoding="utf-8")
+                e = cp["Desktop Entry"]
+            except (configparser.Error, KeyError, UnicodeDecodeError):
+                continue
+            if e.get("Type") != "Application" or e.get("NoDisplay", "").lower() == "true" or not e.get("Icon"):
+                continue
+            out.setdefault(e["Icon"], e.get("Name", f.stem))
+    # The Ambar apps' own icons, and the Dock's Launchpad and Trash.
+    for extra in ("ambar-logo", "user-trash", "user-trash-full"):
+        out.setdefault(extra, extra)
+    return out
+
+
+def write_theme(name: str, cfg: dict, root: Path, out: Path) -> int:
+    t = out / name
+    if t.exists():
+        shutil.rmtree(t)
+    apps = t / "apps" / "scalable"
+    apps.mkdir(parents=True)
+    made = 0
+    for icon, _app in sorted(visible_app_icons(root).items()):
+        if icon.startswith("/") or icon in ("user-trash", "user-trash-full"):
+            continue
+        src = find_icon(ALIASES.get(icon, icon), root, cfg["base"]) or find_icon(icon, root, cfg["base"])
+        if not src:
+            continue
+        try:
+            (apps / f"{icon}.svg").write_text(tile_icon(src, cfg["mode"]))
+            made += 1
+        except (ET.ParseError, OSError, ValueError) as e:
+            print(f"  skipped {icon}: {e}", file=sys.stderr)
+    # Menus and title bars use 16–24 px icons, where a glyph on a tile is too small to read:
+    # those sizes keep Papirus's own drawings (an exact size match wins over the scalable tile).
+    dirs = ["apps/scalable"]
+    small = root / "usr/share/icons" / cfg["base"]
+    for size in ("16x16", "22x22", "24x24"):
+        made_dir = False
+        for f in apps.glob("*.svg"):
+            src_small = small / size / "apps" / f.name
+            if not src_small.exists():
+                src_small = root / "usr/share/icons/Papirus" / size / "apps" / f.name
+            if src_small.exists():
+                if not made_dir:
+                    (t / "apps" / size).mkdir(parents=True)
+                    dirs.append(f"apps/{size}")
+                    made_dir = True
+                shutil.copyfile(src_small.resolve(), t / "apps" / size / f.name)
+    # Folders in the Ambar colour, at every size Papirus draws them.
+    base = root / "usr/share/icons" / cfg["base"]
+    papirus = root / "usr/share/icons/Papirus"
+    for size in ("16x16", "22x22", "24x24", "32x32", "48x48", "64x64"):
+        src_dir = (base / size / "places") if (base / size / "places").is_dir() else papirus / size / "places"
+        if not src_dir.is_dir():
+            continue
+        dst = t / "places" / size
+        dst.mkdir(parents=True)
+        dirs.append(f"places/{size}")
+        for kind in ("folder", "user"):   # folder-orange-documents → folder-documents, user-orange-home → user-home
+            prefix = f"{kind}-{FOLDER_COLOUR}"
+            for f in src_dir.glob(f"{prefix}*.svg"):
+                shutil.copyfile(f.resolve(), dst / (kind + f.name[len(prefix):]))
+    sections = [f"[Icon Theme]\nName={name}\nComment=Ambar OS: one tile shape for every app; built on Papirus\n"
+                f"Inherits={cfg['inherits']}\nDirectories={','.join(dirs)}\nExample=folder\n"]
+    sections.append("[apps/scalable]\nSize=128\nMinSize=28\nMaxSize=512\nType=Scalable\nContext=Applications\n")
+    for d in dirs[1:]:
+        px = int(d.split("/")[1].split("x")[0])
+        context = "Applications" if d.startswith("apps/") else "Places"
+        sections.append(f"[{d}]\nSize={px}\nContext={context}\nType=Fixed\n")
+    (t / "index.theme").write_text("\n".join(sections))
+    return made
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-icons", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for c in ("build", "update"):
+        p = sub.add_parser(c)
+        p.add_argument("--root", type=Path, default=Path("/"))
+        p.add_argument("--out", type=Path)
+    a = ap.parse_args(argv)
+    out = a.out or a.root / "usr/share/icons"
+    for name, cfg in THEMES.items():
+        n = write_theme(name, cfg, a.root, out)
+        print(f"{name}: {n} app icons")
+    cache = shutil.which("gtk-update-icon-cache")
+    if cache and a.root == Path("/"):
+        for name in THEMES:
+            os.system(f"{cache} -q -f {out / name} 2>/dev/null")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

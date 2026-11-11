@@ -38,7 +38,7 @@ if (tray) {
         "org.kde.plasma.networkmanagement", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
         "org.kde.plasma.notifications", "org.kde.plasma.devicenotifier", "org.kde.plasma.mediacontroller",
         "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.cameraindicator",
-        "org.kde.plasma.printmanager", "org.kde.kdeconnect"].join(","));
+        "org.kde.plasma.printmanager", "org.kde.kdeconnect", "org.kde.kupapplet"].join(","));
     tray.writeConfig("knownItems", [
         "org.kde.kscreen", "org.kde.plasma.addons.katesessions", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
         "org.kde.plasma.brightness", "org.kde.plasma.cameraindicator", "org.kde.plasma.clipboard",
@@ -46,7 +46,8 @@ if (tray) {
         "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.mediacontroller",
         "org.kde.plasma.networkmanagement", "org.kde.plasma.notifications", "org.kde.plasma.printmanager",
         "org.kde.plasma.trash", "org.kde.plasma.volume", "org.kde.plasma.weather", "org.kde.kdeconnect",
-        "org.kde.kupapplet", "org.kde.plasma.vault", "org.kde.plasma.wacomtablet"].join(","));
+        "org.kde.kupapplet", "org.kde.plasma.vault", "org.kde.plasma.wacomtablet",
+        "org.kde.merkuro.contact.applet", "org.kde.plasma.kclock_1x2"].join(","));
 }
 add(bar, "os.ambar.controlcenter");
 var clock = add(bar, "org.kde.plasma.digitalclock");
@@ -62,7 +63,7 @@ if (clock) {
 // ------------------------------------------------------------ dock
 var dock = new Panel;
 dock.location = "bottom";
-dock.height = Math.round(gridUnit * 3.4);
+dock.height = Math.round(gridUnit * 4);
 dock.alignment = "center";
 dock.lengthMode = "fit";
 dock.floating = true;

@@ -1,0 +1,34 @@
+#!/bin/bash
+# The Ambar icon themes: every installed app's icon on the same squircle tile, amber
+# folders, Papirus for everything else. Built from the apps actually in the image, and
+# rebuilt whenever apps are added (APT hook) or Flatpak apps change (path unit).
+set -euo pipefail
+QT_QPA_PLATFORM=offscreen /usr/lib/ambar/ambar-icons build
+
+cat > /etc/apt/apt.conf.d/99ambar-icons <<'CFG'
+// Give newly installed apps the Ambar icon tile.
+DPkg::Post-Invoke { "if [ -x /usr/lib/ambar/ambar-icons ]; then QT_QPA_PLATFORM=offscreen /usr/lib/ambar/ambar-icons update >/dev/null 2>&1 || true; fi"; };
+CFG
+
+cat > /etc/systemd/system/ambar-icons.service <<'UNIT'
+[Unit]
+Description=Ambar icons for newly installed apps
+
+[Service]
+Type=oneshot
+Environment=QT_QPA_PLATFORM=offscreen
+ExecStart=/usr/lib/ambar/ambar-icons update
+Nice=10
+UNIT
+cat > /etc/systemd/system/ambar-icons.path <<'UNIT'
+[Unit]
+Description=Watch for Flatpak apps to give them Ambar icons
+
+[Path]
+PathChanged=/var/lib/flatpak/exports/share/applications
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+install -d /var/lib/flatpak/exports/share/applications
+systemctl enable ambar-icons.path

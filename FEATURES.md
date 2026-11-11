@@ -39,6 +39,7 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | Mission Control | All windows at a glance (Meta+W or the top-left screen corner) | ✅ |
 | Window buttons | Red, yellow and green traffic lights on the left | ✅ |
 | Light and dark | One switch changes colours, panels, icons and window frames | ✅ |
+| App icons | Every installed app's icon on the same squircle tile, like macOS, in light and dark; amber folders; apps installed later (APT or Flatpak) get tiles too | ✅ seen in the Dock, Launchpad and Files |
 | Ambar Plasma Style | Translucent menu bar; rounded popups, menus and tooltips with soft shadows; one style for light and dark | ✅ seen in the built desktop · ⚠ blur needs a real GPU |
 | Terminal | Ambar colours (readable in every colour), JetBrains Mono, roomy margins | ✅ |
 | Sounds | Ambar's own sound theme: soft, quiet chimes for login, messages, errors and more (made for Ambar) | ✅ files and levels checked · ⚠️ not heard here (no audio) |

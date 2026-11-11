@@ -189,6 +189,7 @@ ambar() {
 
   log "Ambar's own tools: Workbench, Guard, Clean, Share"
   install -Dm644 "$REPO/desktop/share/python/ambar_ui.py" "$ROOT/usr/lib/ambar/python/ambar_ui.py"
+  install -Dm755 "$REPO/desktop/icons/ambar-icons" "$ROOT/usr/lib/ambar/ambar-icons"
   install -Dm644 "$REPO/desktop/brand/ambar-mark.svg" "$ROOT/usr/share/ambar/ambar-mark.svg"
   local d app
   for d in workbench guard utils; do

@@ -22,6 +22,7 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
 | `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
+| `desktop/icons/` | `ambar-icons`: builds the Ambar/Ambar-Dark icon themes inside the image (squircle tiles over Papirus) | Python |
 | `desktop/sounds/` | Ambar sound theme and its generator (`generate.py`, needs ffmpeg) | Python |
 | `desktop/share/` | `.desktop` files, autostart, icons; `python/ambar_ui.py`, the shared design for Ambar's Qt Widgets apps | Python |
 | `crates/` | Rust workspace: `ambar-automation` (engine), `ambar-service` (`ambard`), `ambar-cli` (`ambar`), `ambar-ai`, `ambar-pkg`, `ambar-recon` (scanner and the shared scope checker) | Rust |
