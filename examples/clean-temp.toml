@@ -1,0 +1,14 @@
+# Manually trash old exports. Trashing is sensitive: you are asked first,
+# and files go to the recoverable Ambar trash, never deleted outright.
+id = "clean-exports"
+name = "Clean exports"
+
+[trigger]
+type = "manual"
+
+[[actions]]
+type = "trash_file"
+path = "~/Documents/Exports/old-export.zip"
+
+[permissions]
+write = ["~/Documents/Exports"]

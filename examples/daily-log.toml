@@ -1,0 +1,22 @@
+# Appends a line to a daily log every weekday at 9:00 local time.
+id = "daily-log"
+name = "Daily work log"
+
+[trigger]
+type = "schedule"
+cron = "0 9 * * 1-5"
+
+[[actions]]
+type = "write_file"
+path = "~/Documents/Ambar Reports/{date}.md"
+content = "# Work log {date}\n\n- [ ] "
+append = true
+
+[[actions]]
+type = "notify"
+title = "Today's work log is ready"
+body = "~/Documents/Ambar Reports/{date}.md"
+
+[permissions]
+write = ["~/Documents/Ambar Reports"]
+notify = true

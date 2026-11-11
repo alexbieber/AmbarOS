@@ -1,0 +1,26 @@
+# Files new PDFs and images from Downloads into dated folders.
+id = "organize-downloads"
+name = "Organize downloads"
+description = "Moves new PDFs and images out of Downloads into dated folders and tells you."
+
+[trigger]
+type = "folder_watch"
+path = "~/Downloads"
+events = ["created"]
+
+[[conditions]]
+type = "file_extension"
+any_of = ["pdf", "png", "jpg", "jpeg"]
+
+[[actions]]
+type = "move_file"
+to_dir = "~/Documents/Ambar Inbox/{file_ext}/{date}"
+
+[[actions]]
+type = "notify"
+title = "Filed {file_name}"
+body = "Moved to Ambar Inbox/{file_ext}/{date}"
+
+[permissions]
+write = ["~/Downloads", "~/Documents/Ambar Inbox"]
+notify = true
