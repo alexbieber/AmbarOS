@@ -237,7 +237,7 @@ async fn workflow_control_over_ipc() {
 
     c.pause("tick").await.unwrap();
     assert_eq!(c.list().await.unwrap()[0].state, "paused");
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await; // let an in-flight tick land
     let paused_at = lines(&log);
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert_eq!(lines(&log), paused_at, "no runs while paused");
@@ -246,7 +246,7 @@ async fn workflow_control_over_ipc() {
     wait_until(|| lines(&log) > paused_at).await;
 
     c.disable("tick").await.unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await; // let an in-flight tick land
     let disabled_at = lines(&log);
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert_eq!(lines(&log), disabled_at, "no runs while disabled");

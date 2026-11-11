@@ -170,6 +170,8 @@ ambar pkg install dev.ambar.daily-notes --enable
 | `memory_get` / `memory_delete` | `key` | `memory` |
 | `memory_put` | `key`, `value` | `memory` |
 | `memory_list` | – | `memory` |
+| `approval_list` | – | owner |
+| `approval_decide` | `id`, `allow` | owner |
 | `agent_create` | `name`, `scopes`, `description?` | owner |
 | `agent_list`, `agent_revoke` (`id`) | | owner |
 | `shutdown` | – | owner |

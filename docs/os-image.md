@@ -20,6 +20,8 @@ os/
 - **Programs:** `ambar` and `ambard` in `/usr/bin`. The Automation Center (`ambar-center`) and the Python SDK in the system Python, with PySide6 from Fedora (`python3-pyside6`).
 - **Background service:** `ambard` is a systemd **user** service, enabled for every user by a global preset. It starts at login and restores enabled workflows. It runs as the logged-in user, never as root.
 - **Desktop:** the Ambar look (colour schemes, look-and-feel, wallpaper, icons and launcher) is the default for new users through `/etc/xdg/kdeglobals`. Window buttons sit on the left, and the login screen uses the Ambar wallpaper.
+- **Search:** typing in KRunner (Alt+Space) finds and runs automations, drafts new ones ("automate …"), and shows waiting approvals. It's a D-Bus runner, activated on demand.
+- **First login:** the Welcome setup opens once and covers the service, appearance, AI and starter automations.
 - **Marketplace:** the bundled marketplace is at `/usr/share/ambar/marketplace`, and `ambar pkg search` uses it by default. Publishers still have to be trusted explicitly.
 - **Branding:** `NAME`, `PRETTY_NAME`, `VARIANT` and `IMAGE_ID`. `ID=fedora` and `VERSION_ID` are kept so dnf, toolbox and bootc keep working.
 
@@ -51,6 +53,15 @@ The smoke test boots the VM, logs in as the test user on the serial console, and
 - `ambar service status` reports ok
 - the bundled marketplace is searchable
 - a workflow can be added and run, and it writes its file
+
+It then logs the test user into the graphical session and checks:
+
+- Plasma (`plasmashell`) is running
+- the Welcome screen autostarted
+- KRunner returns Ambar results over D-Bus
+- the Ambar look-and-feel is installed
+
+Finally it saves a screenshot of the desktop (`output/desktop.png`, uploaded by CI).
 
 The `os-image` CI workflow (`.github/workflows/os-image.yml`) does all of this on every push to `main`. It builds the container, builds the qcow2, boots it under KVM, runs the smoke test, then pushes `ghcr.io/<owner>/ambar-os`.
 
@@ -85,7 +96,7 @@ Ambar OS uses Fedora 45's kernel, firmware and drivers, so its hardware support 
 ## Status and known gaps
 
 - **Not yet built or booted.** The image could not be built where it was written: there was no access to Fedora's registries and no virtualization. The recipe is checked statically (COPY sources, configs, the systemd unit with `systemd-analyze`, shellcheck, the branding script, the Python install step). The smoke harness is tested against a simulated console. The **first real build and boot happens in the `os-image` CI job**, and its results decide whether this is done.
-- **Image signing:** not configured yet (sigstore/cosign). Add it before publishing images for others.
+- **Signature enforcement on the client:** CI signs pushed images with cosign (keyless, sigstore). Installed systems don't yet *require* a valid signature before `bootc upgrade` (`/etc/containers/policy.json`). Add that once the signing identity is final.
 - **SELinux:** `ambard` runs unconfined as the user. A confined policy module is still to do.
 - **Not rebranded:** Plymouth boot splash and the Anaconda installer still show Fedora.
 - **Test credentials:** the qcow2 config's user and password are for tests only. Never ship them.
