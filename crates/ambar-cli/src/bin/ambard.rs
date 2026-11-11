@@ -30,6 +30,11 @@ struct Args {
     /// Seconds to wait for running workflows on shutdown before cancelling them.
     #[arg(long, default_value_t = 30)]
     grace_secs: u64,
+    /// Seconds a sensitive action waits for your approval (Automation Center or
+    /// `ambar approval`). No answer means deny. 0 refuses them outright unless
+    /// the workflow was added with --allow-sensitive.
+    #[arg(long, env = "AMBARD_APPROVAL_TIMEOUT", default_value_t = 300)]
+    approval_timeout: u64,
     /// Shortest schedule interval accepted (humantime, e.g. `10s`).
     #[arg(long, env = "AMBARD_MIN_INTERVAL", default_value = "10s", hide = true)]
     min_interval: humantime::Duration,
@@ -71,10 +76,13 @@ async fn main() -> ExitCode {
         NotifyTarget::Desktop => Arc::new(DesktopNotifier),
         NotifyTarget::Log => Arc::new(LogNotifier),
     };
-    // Nobody is at a terminal to approve sensitive actions in the background;
-    // they run only if pre-approved on the workflow's grant.
+    // Sensitive actions that are not pre-approved wait for a live decision
+    // (see --approval-timeout); with live approvals off they are refused.
     let mut config = DaemonConfig::new(ServicePaths::new(data_dir), notifier, Arc::new(DenyAll));
     config.grace = Duration::from_secs(args.grace_secs);
+    if args.approval_timeout > 0 {
+        config.live_approvals = Some(Duration::from_secs(args.approval_timeout));
+    }
     config.engine.validation.min_interval = args.min_interval.into();
 
     let daemon = match start(config).await {

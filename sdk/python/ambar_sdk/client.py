@@ -194,6 +194,14 @@ class Client:
     def memory_delete(self, key: str) -> bool:
         return bool(self._op("memory_delete", key=key)["deleted"])
 
+    def approvals(self) -> list[dict]:
+        """Owner only. Sensitive actions waiting for a decision."""
+        return self._op("approval_list")
+
+    def decide(self, approval_id: str, allow: bool) -> dict:
+        """Owner only. Allow or deny a waiting sensitive action."""
+        return self._op("approval_decide", id=approval_id, allow=allow)
+
     def agent_create(self, name: str, scopes: list[str], description: str = "") -> tuple[dict, str]:
         d = self._op("agent_create", name=name, scopes=scopes, description=description)
         return d["agent"], d["token"]

@@ -5,6 +5,47 @@ use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
+pub enum ApprovalCmd {
+    /// Sensitive actions waiting for your decision.
+    List,
+    /// Let a waiting action run.
+    Allow {
+        /// Approval id.
+        id: String,
+    },
+    /// Refuse a waiting action.
+    Deny {
+        /// Approval id.
+        id: String,
+    },
+}
+
+pub async fn approval(cmd: &ApprovalCmd, paths: &ServicePaths) -> Result<i32> {
+    let mut c = connect(paths).await?;
+    match cmd {
+        ApprovalCmd::List => {
+            let list = c.approvals().await?;
+            if list.is_empty() {
+                println!("Nothing is waiting for your approval.");
+            }
+            for a in list {
+                println!("{}  {} wants to {}
+  (auto-denied at {})", a.id, a.workflow_id, a.description, a.expires_at);
+            }
+        }
+        ApprovalCmd::Allow { id } => {
+            let a = c.decide(id, true).await?;
+            println!("allowed: {} may {}", a.workflow_id, a.description);
+        }
+        ApprovalCmd::Deny { id } => {
+            let a = c.decide(id, false).await?;
+            println!("denied: {} may not {}", a.workflow_id, a.description);
+        }
+    }
+    Ok(0)
+}
+
+#[derive(Subcommand, Debug)]
 pub enum AgentCmd {
     /// Create an agent identity and print its token (shown only once).
     Create {

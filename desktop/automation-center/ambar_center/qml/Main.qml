@@ -267,12 +267,14 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                             }
                             Rectangle {
-                                visible: nav.modelData.key === "proposals" && backend.pendingProposals.length > 0
+                                property int count: nav.modelData.key === "proposals" ? backend.pendingProposals.length
+                                                  : nav.modelData.key === "overview" ? backend.approvals.length : 0
+                                visible: count > 0
                                 implicitWidth: Math.max(20, badge.implicitWidth + 10)
                                 implicitHeight: 20
                                 radius: 10
                                 color: t.accent
-                                Text { id: badge; anchors.centerIn: parent; text: backend.pendingProposals.length; color: t.onAccent; font.pixelSize: 11; font.weight: Font.Bold }
+                                Text { id: badge; anchors.centerIn: parent; text: parent.count; color: t.onAccent; font.pixelSize: 11; font.weight: Font.Bold }
                             }
                         }
                         MouseArea {
@@ -396,6 +398,35 @@ ApplicationWindow {
                         ColumnLayout {
                             width: parent.width
                             spacing: 20
+
+                            Repeater {
+                                model: backend.approvals
+                                delegate: Rectangle {
+                                    id: apCard
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    implicitHeight: apRow.implicitHeight + 32
+                                    radius: t.radius
+                                    color: t.accentSoft
+                                    border.color: t.accent
+                                    border.width: 1
+                                    RowLayout {
+                                        id: apRow
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 14
+                                        ColumnLayout {
+                                            spacing: 3
+                                            Layout.fillWidth: true
+                                            Label2 { text: "Needs your approval"; font.weight: Font.DemiBold }
+                                            Label2 { text: apCard.modelData.workflow_id + " wants to " + apCard.modelData.description; Layout.fillWidth: true }
+                                            Muted { text: "Asked " + apCard.modelData.when + " · denied automatically if you don't answer" }
+                                        }
+                                        Btn { text: "Deny"; danger: true; onClicked: backend.decideApproval(apCard.modelData.id, false) }
+                                        Btn { text: "Allow"; primary: true; onClicked: backend.decideApproval(apCard.modelData.id, true) }
+                                    }
+                                }
+                            }
 
                             Card {
                                 Layout.fillWidth: true

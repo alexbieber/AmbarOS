@@ -9,6 +9,7 @@ use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
 use crate::agents::{Agent, Proposal};
+use crate::approvals::PendingApproval;
 use crate::auth::read_token;
 use crate::paths::ServicePaths;
 use crate::protocol::{
@@ -286,6 +287,14 @@ impl Client {
     /// Owner: list agents.
     pub async fn agent_list(&mut self) -> Result<Vec<Agent>, ClientError> {
         self.call(&Request::AgentList).await
+    }
+    /// Owner: sensitive actions waiting for a decision.
+    pub async fn approvals(&mut self) -> Result<Vec<PendingApproval>, ClientError> {
+        self.call(&Request::ApprovalList).await
+    }
+    /// Owner: allow or deny a waiting sensitive action.
+    pub async fn decide(&mut self, id: &str, allow: bool) -> Result<PendingApproval, ClientError> {
+        self.call(&Request::ApprovalDecide { id: id.into(), allow }).await
     }
     /// Owner: revoke an agent.
     pub async fn agent_revoke(&mut self, id: &str) -> Result<Agent, ClientError> {

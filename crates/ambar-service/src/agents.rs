@@ -227,7 +227,9 @@ pub fn authorize(principal: &Principal, request: &Request) -> Result<(), String>
         | Request::AgentList
         | Request::AgentRevoke { .. }
         | Request::ProposalApprove { .. }
-        | Request::ProposalReject { .. } => Err(format!(
+        | Request::ProposalReject { .. }
+        | Request::ApprovalList
+        | Request::ApprovalDecide { .. } => Err(format!(
             "`{}` can only be done by the owner, not by agent `{}`",
             request.op(),
             agent.name

@@ -161,6 +161,15 @@ pub enum Request {
         /// Agent id or name.
         id: String,
     },
+    /// Owner: sensitive actions waiting for a decision.
+    ApprovalList,
+    /// Owner: allow or deny a waiting sensitive action.
+    ApprovalDecide {
+        /// Approval id.
+        id: String,
+        /// `true` to let it run.
+        allow: bool,
+    },
 }
 
 fn default_limit() -> usize {
@@ -197,6 +206,8 @@ impl Request {
             Request::AgentCreate { .. } => "agent_create",
             Request::AgentList => "agent_list",
             Request::AgentRevoke { .. } => "agent_revoke",
+            Request::ApprovalList => "approval_list",
+            Request::ApprovalDecide { .. } => "approval_decide",
         }
     }
 
@@ -213,6 +224,7 @@ impl Request {
                 | Request::MemoryGet { .. }
                 | Request::MemoryList
                 | Request::AgentList
+                | Request::ApprovalList
         )
     }
 }
@@ -338,6 +350,9 @@ pub struct Health {
     pub recovered_interrupted_runs: usize,
     /// Workflows that should have been restored but could not be.
     pub restore_failures: Vec<RestoreFailure>,
+    /// Sensitive actions waiting for the owner's decision.
+    #[serde(default)]
+    pub pending_approvals: usize,
     /// Whether shutdown has begun.
     pub shutting_down: bool,
 }

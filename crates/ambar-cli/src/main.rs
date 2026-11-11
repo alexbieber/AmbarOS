@@ -94,6 +94,9 @@ enum Command {
     /// Manage agent identities and review their proposals.
     #[command(subcommand)]
     Agent(agent_cmds::AgentCmd),
+    /// Allow or deny sensitive actions that are waiting for you.
+    #[command(subcommand)]
+    Approval(agent_cmds::ApprovalCmd),
     /// Build, sign, share and install workflow packages.
     #[command(subcommand)]
     Pkg(pkg_cmds::PkgCmd),
@@ -385,6 +388,10 @@ async fn main() -> Result<()> {
         }
         Command::Pkg(cmd) => {
             let code = pkg_cmds::pkg(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Approval(cmd) => {
+            let code = agent_cmds::approval(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
             std::process::exit(code);
         }
         Command::Agent(cmd) => {

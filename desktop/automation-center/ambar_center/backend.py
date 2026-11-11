@@ -58,6 +58,7 @@ class Backend(QObject):
         self._proposals: list = []
         self._agents: list = []
         self._activity: list = []
+        self._approvals: list = []
         self._error = ""
         self._busy = ""
         self._done.connect(lambda fn: fn())
@@ -82,6 +83,7 @@ class Backend(QObject):
                 props = c.proposals()
                 agents = c.agents()
                 hist = c.history(limit=60)
+                approvals = c.approvals()
         except NotRunning:
             self._connected = False
             self._error = "The Ambar service isn't running."
@@ -110,7 +112,10 @@ class Backend(QObject):
         self._workflows = wfs
         self._proposals = props
         self._agents = agents
+        for a in approvals:
+            a["when"] = _ago(a.get("requested_at"))
         self._activity = hist
+        self._approvals = approvals
         self._connected = True
         self._error = ""
         self.changed.emit()
@@ -142,6 +147,11 @@ class Backend(QObject):
     @Property("QVariantList", notify=changed)
     def activity(self) -> list:
         return self._activity
+
+    @Property("QVariantList", notify=changed)
+    def approvals(self) -> list:
+        """Sensitive actions waiting for the owner."""
+        return self._approvals
 
     @Property(str, notify=changed)
     def error(self) -> str:
@@ -222,6 +232,11 @@ class Backend(QObject):
     def approve(self, proposal_id: str, enable: bool) -> None:
         self._do("Approve", lambda c: c.approve(proposal_id, enable=enable),
                  "Approved" + (" and enabled" if enable else ""))
+
+    @Slot(str, bool)
+    def decideApproval(self, approval_id: str, allow: bool) -> None:
+        self._do("Approval", lambda c: c.decide(approval_id, allow),
+                 "Allowed" if allow else "Denied")
 
     @Slot(str)
     def reject(self, proposal_id: str) -> None:

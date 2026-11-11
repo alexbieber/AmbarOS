@@ -16,6 +16,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::agents::{AgentError, AgentStore, Principal, Scope, authorize};
+use crate::approvals::ApprovalBroker;
 use crate::auth::{authorize_peer, constant_time_eq, generate_token, write_token};
 use crate::paths::{InstanceLock, PathError, ServicePaths, current_uid};
 use crate::protocol::{
@@ -48,6 +49,10 @@ pub struct DaemonConfig {
     pub approver: Arc<dyn Approver>,
     /// How long shutdown waits for in-progress runs.
     pub grace: Duration,
+    /// When set, sensitive actions that are not pre-approved wait this long
+    /// for the owner to allow them (live approvals) instead of using
+    /// `approver`. No answer means deny.
+    pub live_approvals: Option<Duration>,
 }
 
 impl DaemonConfig {
@@ -63,6 +68,7 @@ impl DaemonConfig {
             notifier,
             approver,
             grace: Duration::from_secs(30),
+            live_approvals: None,
         }
     }
 }
@@ -104,6 +110,7 @@ struct Shared {
     restore_failures: Mutex<Vec<RestoreFailure>>,
     shutdown: CancellationToken,
     agents: AgentStore,
+    broker: Option<Arc<ApprovalBroker>>,
 }
 
 /// A started daemon.
@@ -155,7 +162,14 @@ pub async fn start(config: DaemonConfig) -> Result<RunningDaemon, DaemonError> {
         .executions(None, 10_000)
         .map(|r| r.iter().filter(|e| e.status.as_str() == "running").count())
         .unwrap_or(0);
-    let engine = Engine::new(store, config.notifier, config.approver, config.engine)?;
+    let broker = config.live_approvals.map(|timeout| {
+        Arc::new(ApprovalBroker::new(timeout, config.notifier.clone(), store.clone()))
+    });
+    let approver: Arc<dyn ambar_automation::Approver> = match &broker {
+        Some(b) => b.clone(),
+        None => config.approver.clone(),
+    };
+    let engine = Engine::new(store, config.notifier, approver, config.engine)?;
 
     let token = generate_token().map_err(|e| DaemonError::Token(e.to_string()))?;
     write_token(&paths.token(), &token)?;
@@ -171,6 +185,7 @@ pub async fn start(config: DaemonConfig) -> Result<RunningDaemon, DaemonError> {
         restore_failures: Mutex::new(Vec::new()),
         shutdown: CancellationToken::new(),
         agents: AgentStore::open(&paths.db())?,
+        broker,
     });
 
     let restored = restore(&shared);
@@ -309,6 +324,9 @@ async fn serve(
     drop(listener);
     let _ = std::fs::remove_file(shared.paths.socket());
     let _ = std::fs::remove_file(shared.paths.token());
+    if let Some(b) = &shared.broker {
+        b.close(); // waiting approvals are denied so runs can finish
+    }
     let report = shared.engine.shutdown(grace).await;
     service_audit(
         &shared,
@@ -613,6 +631,7 @@ fn target_of(request: &Request) -> String {
             format!(" agent_name={name} scopes={}", scopes.join(","))
         }
         Request::MemoryPut { key, .. } | Request::MemoryDelete { key } => format!(" key={key}"),
+        Request::ApprovalDecide { id, allow } => format!(" approval={id} allow={allow}"),
         _ => String::new(),
     }
 }
@@ -746,6 +765,19 @@ fn agent_request(shared: &Shared, principal: &Principal, request: Request) -> Re
             }
         }
         Request::AgentList => ok_or(agents.list()),
+        Request::ApprovalList => Response::ok(
+            shared.broker.as_ref().map(|b| b.list()).unwrap_or_default(),
+        ),
+        Request::ApprovalDecide { id, allow } => match &shared.broker {
+            None => Response::err(ErrorCode::State, "live approvals are not enabled"),
+            Some(b) => match b.decide(&id, allow) {
+                Some(info) => Response::ok(info),
+                None => Response::err(
+                    ErrorCode::NotFound,
+                    format!("approval `{id}` is not waiting (already decided or expired)"),
+                ),
+            },
+        },
         Request::AgentRevoke { id } => ok_or(agents.revoke(&id)),
         other => Response::err(
             ErrorCode::BadRequest,
@@ -866,6 +898,7 @@ fn health(shared: &Shared) -> Health {
         running,
         recovered_interrupted_runs: shared.recovered,
         restore_failures,
+        pending_approvals: shared.broker.as_ref().map(|b| b.list().len()).unwrap_or(0),
         shutting_down: engine.is_shutting_down(),
     }
 }

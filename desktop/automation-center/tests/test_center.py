@@ -192,6 +192,49 @@ def test_descriptions_are_never_parsed_as_flags(ui, world, tmp_path):
     _, data = world
     with Client(data) as c:
         assert all(w["id"] != "flag-test" for w in c.list_workflows()), "description was parsed as --add"
+    from PySide6.QtCore import QObject
+    win.findChild(QObject, "draftPopup").close()
+    pump(app, 0.2)
+
+
+def test_live_approval_from_the_desktop(ui, world):
+    import threading
+    app, win, backend, warnings, tmp = ui
+    _, data = world
+    (tmp / "work").mkdir(exist_ok=True)
+    (tmp / "work" / "old.log").write_text("x")
+    with Client(data) as c:
+        c.register(f'''
+id = "cleanup"
+name = "Clean up old logs"
+[trigger]
+type = "manual"
+[[actions]]
+type = "trash_file"
+path = "{tmp}/work/old.log"
+[permissions]
+write = ["{tmp}/work"]
+''')
+        c.enable("cleanup")
+    result = {}
+    t = threading.Thread(target=lambda: result.update(
+        Client(data, timeout=60).run_now("cleanup")), daemon=True)
+    t.start()
+    deadline = time.time() + 15
+    while not backend.approvals and time.time() < deadline:
+        backend.refresh()
+        pump(app, 0.2)
+    assert backend.approvals, "approval never showed up"
+    assert "old.log" in backend.approvals[0]["description"]
+    win.setProperty("page", "overview")
+    shot(app, win, f"{win.property('themeOverride')}-approval")
+    assert (tmp / "work" / "old.log").exists()
+    backend.decideApproval(backend.approvals[0]["id"], True)
+    t.join(30)
+    assert result.get("status") == "succeeded", result
+    assert not (tmp / "work" / "old.log").exists()
+    assert not backend.approvals
+    assert not warnings, warnings
 
 
 def test_disconnected_state(tmp_path):
