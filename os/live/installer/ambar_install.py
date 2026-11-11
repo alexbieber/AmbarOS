@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -28,6 +29,30 @@ IMAGE = "ghcr.io/alexbieber/ambar-os:latest"
 MIN_BYTES = 32 * 1024**3
 LIVE_LABEL = "AmbarOS-Live"
 LIVE_MOUNTS = ("/run/initramfs/live", "/run/rootfsbase")
+MARK = os.environ.get("AMBAR_LOGO", "/usr/share/icons/hicolor/scalable/apps/ambar-logo.svg")
+
+# Ambar dark look (same colours as the Plasma theme and Automation Center).
+STYLE = """
+#installer { background: #15120F; }
+QLabel { color: #F7F4EF; font-size: 13px; }
+#title { font-size: 22px; font-weight: 600; }
+#muted, #note { color: #A89F95; }
+#step { color: #F2A43A; font-weight: 600; margin-top: 6px; }
+#warn { color: #E8836B; }
+QListWidget, QLineEdit, QPlainTextEdit {
+  background: #1F1A15; color: #F7F4EF; border: 1px solid #3A3129; border-radius: 10px;
+  padding: 6px; font-size: 13px; selection-background-color: #F2A43A; selection-color: #1A1612;
+}
+QListWidget::item { padding: 10px 8px; border-radius: 7px; }
+QListWidget::item:selected { background: #3A2A16; color: #FFFFFF; border: 1px solid #F2A43A; }
+QLineEdit:focus { border-color: #F2A43A; }
+QPlainTextEdit { font-family: monospace; font-size: 12px; color: #CFC6BB; }
+QPushButton#install {
+  background: #F2A43A; color: #1A1612; border: none; border-radius: 9px;
+  padding: 10px 18px; font-weight: 600; font-size: 13px;
+}
+QPushButton#install:disabled { background: #3A3129; color: #7D7369; }
+"""
 
 
 def lsblk() -> dict:
@@ -152,35 +177,73 @@ def gui(image: str) -> int:  # pragma: no cover - exercised by test_installer_gu
 
 def _window_class():
     from PySide6.QtCore import QProcess
-    from PySide6.QtWidgets import (QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                    QMessageBox, QPlainTextEdit, QPushButton,
                                    QVBoxLayout, QWidget)
+
+    def _mark_pixmap(height: int):
+        """The Ambar mark, drawn from the installed SVG (blank if it's missing)."""
+        from PySide6.QtCore import QRectF, Qt
+        from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
+        from PySide6.QtSvg import QSvgRenderer
+        dpr = QGuiApplication.primaryScreen().devicePixelRatio() if QGuiApplication.primaryScreen() else 1
+        w = int(height * 320 / 230)
+        pm = QPixmap(int(w * dpr), int(height * dpr))
+        pm.fill(Qt.GlobalColor.transparent)
+        r = QSvgRenderer(MARK)
+        if r.isValid():
+            p = QPainter(pm)
+            r.render(p, QRectF(0, 0, w * dpr, height * dpr))
+            p.end()
+        pm.setDevicePixelRatio(dpr)
+        return pm
 
     class InstallerWindow(QWidget):
         def __init__(self, image: str, tree: dict | None = None):
             super().__init__()
             self.image = image
             self.setWindowTitle("Install Ambar OS")
-            self.resize(640, 520)
+            self.setObjectName("installer")
+            self.resize(680, 600)
+            self.setStyleSheet(STYLE)
             lay = QVBoxLayout(self)
-            lay.addWidget(QLabel("<h2>Install Ambar OS</h2>"
-                                 "Ambar OS will replace everything on the disk you choose. "
-                                 "You'll create your account the first time it starts. "
-                                 "Needs an internet connection."))
+            lay.setContentsMargins(32, 28, 32, 28)
+            lay.setSpacing(12)
+            head = QHBoxLayout()
+            head.setSpacing(14)
+            mark = QLabel(objectName="mark")
+            mark.setPixmap(_mark_pixmap(46))
+            head.addWidget(mark)
+            titles = QVBoxLayout()
+            titles.setSpacing(2)
+            titles.addWidget(QLabel("Install Ambar OS", objectName="title"))
+            titles.addWidget(QLabel("Replaces everything on the disk you choose. You'll create your "
+                                    "account the first time it starts. Needs an internet connection.",
+                                    objectName="muted", wordWrap=True))
+            head.addLayout(titles, 1)
+            lay.addLayout(head)
+            lay.addSpacing(6)
+            lay.addWidget(QLabel("1. Choose a disk", objectName="step"))
             self.disks = QListWidget(objectName="disks")
+            self.disks.setMinimumHeight(120)
             lay.addWidget(self.disks)
             self.note = QLabel(objectName="note")
             self.note.setWordWrap(True)
             lay.addWidget(self.note)
+            lay.addWidget(QLabel("2. Type its name to confirm", objectName="step"))
             self.confirm = QLineEdit(objectName="confirm")
-            self.confirm.setPlaceholderText("Type the disk name shown above to confirm, e.g. /dev/sda")
+            self.confirm.setPlaceholderText("e.g. /dev/nvme0n1")
             lay.addWidget(self.confirm)
+            row = QHBoxLayout()
+            row.addWidget(QLabel("Everything on that disk will be erased.", objectName="warn"), 1)
             self.button = QPushButton("Erase disk and install", objectName="install")
             self.button.setEnabled(False)
-            lay.addWidget(self.button)
+            row.addWidget(self.button)
+            lay.addLayout(row)
             self.log = QPlainTextEdit(objectName="log")
             self.log.setReadOnly(True)
-            lay.addWidget(self.log)
+            self.log.setPlaceholderText("Progress appears here.")
+            lay.addWidget(self.log, 1)
             self.proc = None
             ok, skipped = candidates(tree if tree is not None else lsblk())
             for d in ok:

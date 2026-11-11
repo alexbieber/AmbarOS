@@ -107,3 +107,14 @@ def test_community_files_exist():
         y = yaml.safe_load(f.read_text())
         if f.name != "config.yml":
             assert y["name"] and y["body"], f.name
+
+
+def test_readme_local_links_and_media_exist():
+    text = (ROOT / "README.md").read_text()
+    refs = re.findall(r'(?:src|href)="([^"#:]+)"', text) + re.findall(r"\]\(([^)#:]+)(?:#[^)]*)?\)", text)
+    assert len(refs) > 20
+    for ref in refs:
+        assert (ROOT / ref).exists(), f"README points at missing {ref}"
+    for f in ["docs/media/ambar-demo.mp4", "docs/media/ambar-demo.gif", "docs/images/hero.jpg"]:
+        assert (ROOT / f).stat().st_size > 50_000, f
+    assert "replayed from a file" in text, "the demo must say the AI reply is scripted"
