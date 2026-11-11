@@ -118,3 +118,9 @@ def test_readme_local_links_and_media_exist():
     for f in ["docs/media/ambar-demo.mp4", "docs/media/ambar-demo.gif", "docs/images/hero.jpg"]:
         assert (ROOT / f).stat().st_size > 50_000, f
     assert "replayed from a file" in text, "the demo must say the AI reply is scripted"
+
+
+def test_site_footer_names_the_current_base():
+    cfg = (ROOT / "mkdocs.yml").read_text()
+    footer = next(l for l in cfg.splitlines() if l.startswith("copyright:"))
+    assert "Ubuntu" in footer and "Fedora" not in footer, footer

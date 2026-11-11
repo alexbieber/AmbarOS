@@ -4,7 +4,7 @@ site_url: https://alexbieber.github.io/AmbarOS/
 repo_url: https://github.com/alexbieber/AmbarOS
 repo_name: alexbieber/AmbarOS
 edit_uri: edit/main/docs/
-copyright: Ambar OS · Apache-2.0 · Built on Fedora, not affiliated with the Fedora Project
+copyright: Ambar OS · Apache-2.0 · Built on Ubuntu and KDE Plasma, not affiliated with Canonical, KDE or Apple
 
 theme:
   name: material
