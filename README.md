@@ -8,50 +8,25 @@ the openness of Linux, and automation built in from the start. See
 
 ## Status
 
-**Phases 1–3 are implemented and tested:** the automation engine and the
-`ambard` background service. AI, desktop, agents, ecosystem and the bootable
-image have not started. Everything has been tested on Linux only; macOS is
-not yet verified. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what works,
-what doesn't, and the known risks.
+The full Ambar software stack is built and tested: automation engine, background service, AI automation builder, agent runtime, Automation Center desktop app, Plasma theme, SDK, packages and marketplace. **The bootable OS image is written but has not been built or booted yet.** That happens in CI (`os-image` workflow). Everything has been tested on Linux; macOS is untested.
 
-| Capability (Phase 2 deliverable) | Status | Test |
+141 automated tests pass. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
+
+![Automation Center](docs/images/automation-center.png)
+
+## What's here
+
+| Part | Where | Docs |
 |---|---|---|
-| Create and validate a workflow | ✅ | `create_and_validate` |
-| Execute a scheduled workflow (interval + cron) | ✅ | `scheduled_workflow_runs`, `cron_schedules_are_accepted` |
-| Monitor a selected folder | ✅ | `folder_watch_files_matching_files` |
-| Perform approved file operations | ✅ | `sensitive_actions_need_approval`, `existing_files_are_not_overwritten_without_approval` |
-| Send a notification | ✅ | asserted in schedule + folder tests |
-| Record execution history | ✅ | `history_is_persisted` |
-| Pause and cancel workflows | ✅ | `pause_*`, `cancel_stops_an_in_progress_run` |
-| Enforce permissions | ✅ | `activation_requires_grant`, `runtime_scope_is_enforced`, `revoked_grant_denies_runs` |
-
-Phase 3 (`ambard` background service): background runs, IPC with auth, restore
-after restart, crash recovery, duplicate-run prevention, audit and health checks.
-See [`docs/service.md`](docs/service.md).
-
-67 automated tests (unit, in-process daemon, and real-process tests including
-SIGKILL recovery). `cargo fmt`, `cargo clippy -D warnings` and `cargo audit` are clean.
-
-## Repository layout
-
-```
-crates/
-  ambar-automation/   Automation engine library (Rust)
-    src/workflow.rs     Workflow definitions (TOML) + validation
-    src/permissions.rs  Permission requests, grants, path scoping
-    src/engine.rs       Lifecycle, dispatch, pause/cancel, approvals
-    src/triggers.rs     Interval/cron schedules, folder watching
-    src/actions.rs      Permission-checked file operations + notify
-    src/history.rs      SQLite: workflows, grants, executions, audit log
-    src/notify.rs       Notification backends
-    tests/engine.rs     End-to-end tests of every Phase 2 capability
-  ambar-service/      ambard: daemon, IPC protocol + auth, client, launchd/systemd units
-    tests/daemon.rs     In-process daemon tests over a real socket
-  ambar-cli/          `ambar` CLI and `ambard` binary
-    tests/service.rs    Real-process tests (start/stop, restart, SIGKILL, SIGTERM)
-examples/             Sample workflows
-docs/                 Architecture, workflow format, status, master plan
-```
+| Automation engine (workflows, triggers, permission-checked actions, history) | `crates/ambar-automation` | [architecture](docs/architecture.md), [workflow format](docs/workflow-format.md) |
+| `ambard` background service, authenticated local IPC, agents | `crates/ambar-service` | [service](docs/service.md) |
+| AI automation builder (Claude, OpenAI-compatible, Ollama) | `crates/ambar-ai`, `ambar ai` | below |
+| Signed workflow packages + marketplace | `crates/ambar-pkg`, `marketplace/` | [developer guide](docs/developer-guide.md) |
+| `ambar` CLI and `ambard` binaries | `crates/ambar-cli` | `ambar --help` |
+| Automation Center (Qt/QML desktop app) | `desktop/automation-center` | |
+| Ambar Plasma theme (colours, look-and-feel, wallpaper) | `desktop/plasma` | |
+| Python SDK (owners and agents) | `sdk/python` | [developer guide](docs/developer-guide.md) |
+| Bootable OS image (bootc, Fedora 45 Kinoite) | `os/` | [OS image](docs/os-image.md) |
 
 ## Quick start
 
@@ -77,6 +52,24 @@ ambar service install
 
 # Or run one workflow in the foreground, without the service
 ambar run examples/daily-log.toml --once
+
+# Describe an automation in plain words (needs a model: Claude, OpenAI-compatible, or local Ollama)
+ambar ai config --provider anthropic        # key from $ANTHROPIC_API_KEY or `ambar ai set-key`
+ambar ai create "when a PDF lands in Downloads, move it to Documents/PDFs and tell me"
+
+# Give an assistant limited access
+ambar agent create planner --scope read --scope propose
+ambar agent proposals
+
+# Packages
+ambar pkg search notes --index marketplace/index.json
+
+# Desktop app and theme
+pip install ./sdk/python ./desktop/automation-center && ambar-center
+desktop/install.sh                          # Plasma: Ambar look, wallpaper, launcher
+
+# The OS image (Linux with rootful podman)
+os/build.sh qcow2 && os/test-qemu.sh
 ```
 
 A workflow looks like this:
@@ -122,13 +115,14 @@ Details: [`docs/architecture.md`](docs/architecture.md).
 ## Development
 
 ```sh
+bash scripts/verify.sh            # everything below plus a live ambard smoke test
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo audit
+python3 -m pytest sdk/python/tests desktop os/tests   # needs PySide6-Essentials, pytest
 ```
 
-CI (`.github/workflows/ci.yml`) runs these on Linux and macOS, plus an MSRV check.
+CI: `.github/workflows/ci.yml` runs Rust on Linux and macOS, the MSRV check, `cargo audit`, the Python and desktop tests (uploading screenshots), and the unit-file checks. `.github/workflows/os-image.yml` builds and boots the OS image.
 
 ## License
 

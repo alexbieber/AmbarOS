@@ -2,86 +2,85 @@
 
 _Last updated: 2026-11-11_
 
-Phase numbering follows the updated roadmap:
+## Summary
 
-1. Phases 1–2: automation foundation
-2. Phase 3: background service
-3. Phase 4: AI automation builder
-4. Phase 5: desktop
-5. Phase 6: agents and security
-6. Phase 7: developer ecosystem
-7. Phase 8: bootable OS
+The full Ambar software stack is built and tested on Linux. The bootable OS image is **written but has never been built or booted**: that happens in the `os-image` CI job or on your machine. Until that passes, Ambar OS is a working, tested set of software that runs *on top of* Linux (and, untested, macOS), plus a ready-to-build image recipe. It is not yet a verified installable operating system.
 
-| Phase | Status |
-|---|---|
-| 1–2 Automation foundation | Implemented and tested |
-| 3 Background service (`ambard`) | Implemented and tested (see gaps below) |
-| 4–8 | Not started |
-
-## Test results (2026-11-11, Linux container)
-
-| Suite | Tests | What it covers |
+| Phase | What | Status |
 |---|---|---|
-| `ambar-automation` unit | 18 | validation, permissions, symlink escape, actions, history |
-| `ambar-automation` integration | 18 | the 8 Phase 2 capabilities, plus disable, overlap policy, graceful drain |
-| `ambar-service` unit | 13 | private dirs, lock, token, protocol, unit files |
-| `ambar-service` daemon | 13 | in-process daemon over a real socket (below) |
-| `ambar-cli` service | 5 | real `ambar` and `ambard` binaries as separate processes, SIGKILL, SIGTERM |
-| **Total** | **67** | the full suite passed 5/5 consecutive runs |
+| 1–2 | Automation engine, CLI | ✅ built and tested |
+| 3 | `ambard` background service, authenticated IPC | ✅ built and tested |
+| 4 | AI automation builder (Claude / OpenAI-compatible / Ollama) | ✅ built and tested against mock APIs · ⚠ never called a real model |
+| 5 | Automation Center (Qt/QML) + Ambar Plasma theme | ✅ app tested offscreen with screenshots · ⚠ theme never loaded in a real Plasma session |
+| 6 | Agent identities, scopes, proposals, memory, rate limits | ✅ built and tested |
+| 7 | Python SDK, signed packages, marketplace, developer guide | ✅ built and tested |
+| 8 | Bootable image (bootc on Fedora 45 Kinoite), installer, updates | ⚠ written and statically checked · ❌ **not built or booted** |
 
-Checks:
-- `cargo fmt --check`, `cargo clippy --all-targets -D warnings` and `cargo doc` are clean.
-- `cargo audit` is clean. New dependencies: `rustix` (process ids), `getrandom` (token). Both were already in the dependency tree.
-- The generated systemd unit passes `systemd-analyze verify` with no warnings, and the plist is well-formed XML (`xmllint`).
-- **Sabotage checks:**
-  - Bypassing the token check fails `ipc_requires_valid_token_and_hello_first`.
-  - Letting schedule ticks queue instead of skip fails `duplicate_execution_is_prevented`.
-  - Skipping restore fails `enabled_workflows_are_restored_after_restart`.
+## Test results (2026-11-11, Ubuntu 24.04 container)
 
-### Phase 3 requirements → tests
-
-| Requirement | Test(s) |
+| Suite | Tests |
 |---|---|
-| Run in background without CLI open | `service_start_status_stop`, `workflows_survive_service_restart` |
-| Local IPC | all `ambar-service` daemon tests, all CLI tests |
-| start / stop / pause / resume / cancel / status | `workflow_control_over_ipc`, `workflows_survive_service_restart` |
-| Persist definitions and state | `enabled_workflows_are_restored_after_restart` |
-| Restore after restart | same; `failed_restores_are_reported_and_retried` |
-| Graceful shutdown | `shutdown_lets_in_flight_runs_finish`, `sigterm_is_a_graceful_shutdown`, `shutdown_*` (engine) |
-| Recovery after unexpected termination | `recovers_after_sigkill` (real SIGKILL), `crash_leftovers_are_recovered` |
-| Duplicate execution prevention | `duplicate_execution_is_prevented`, `second_instance_is_refused`, `foreground_run_is_refused_while_service_owns_the_data_dir`, `overlapping_schedule_ticks_are_skipped_not_duplicated` |
-| Audit every control operation | `workflow_control_over_ipc` (exact audit sequence incl. failures), `startup_health_and_graceful_shutdown` |
-| Health checks | `startup_health_and_graceful_shutdown`, `failed_restores_are_reported_and_retried` |
-| IPC authentication / authorization | `ipc_requires_valid_token_and_hello_first`, `peers_must_be_the_same_user`, file-mode assertions |
-| Permission enforcement through the service | `runtime_permissions_still_enforced_through_the_service`, `sensitive_actions_are_refused_in_background_unless_preapproved` |
-| Concurrent workflows | `concurrent_workflows_and_clients` (6 workflows, 20 clients × 20 requests) |
+| Rust (`cargo test --workspace`): 7 crates, unit + integration + real-process | **114** |
+| Python SDK against a real `ambard` | 4 |
+| Automation Center: real `ambard`, offscreen QML, both themes, AI draft flow | 7 |
+| Plasma theme files: colour schemes, WCAG AA contrast, packages, desktop entry | 8 |
+| OS recipe: COPY sources, configs, systemd unit, shellcheck, branding, smoke harness | 8 |
+| **Total** | **141** (3/3 consecutive full runs passed) |
+
+Also clean: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `cargo audit` (no advisories), `shellcheck`, `desktop-file-validate`, `systemd-analyze verify`.
+
+### Sabotage checks (deliberately broken code must fail a test)
+
+| Sabotage | Caught by |
+|---|---|
+| Owner-token check bypassed | `ipc_requires_valid_token_and_hello_first` |
+| Schedule ticks queued instead of skipped | `duplicate_execution_is_prevented` |
+| Restore after restart skipped | `enabled_workflows_are_restored_after_restart` |
+| AI description passed without `--` (flag injection) | `test_descriptions_are_never_parsed_as_flags` |
+
+### Attacks the tests simulate
+
+- **Workflows:** symlink escape from a granted folder; `..` traversal; unknown fields and actions (e.g. `run_shell`).
+- **AI:** a model output that writes `~/.ssh/authorized_keys` is flagged HIGH and not saved non-interactively. A model that insists on shell commands never produces a draft. API keys never appear in errors.
+- **Agents:** an agent with every scope still can't register, enable, grant, remove, shut down or manage agents. A revoked agent is cut off mid-connection. The rate limit trips at 120 requests per minute.
+- **Packages:** tampered contents; a re-signature with a different key under the same publisher name; files smuggled past the manifest; an index hash mismatch; path traversal in manifests.
+
+## Bugs found and fixed during this work
+
+- **Duplicate runs:** re-registering a workflow could have let two runs overlap. The run lock is now kept across re-registration.
+- **Agent revocation:** revoking an agent didn't cut off its already-open connections. The identity is now re-checked on every request.
+- **Agent shutdown:** an agent's `shutdown` request could have stopped the service even though it was refused. Shutdown now requires a successful response.
+- **Contrast:** the light-theme accent (`#D2700A`) failed WCAG AA for button text (3.46:1). Changed to `#B35C05` (4.72:1).
+- **Flag injection:** the Automation Center passed the AI description so that it could be parsed as CLI flags. Fixed and tested.
+- **Minimum Rust version:** the declared minimum (1.85) was wrong for `rusqlite`. It is now 1.89.
 
 ## Not verified — do not treat as done
 
-- **Nothing has run on macOS yet.** Every result above is from Linux. This includes FSEvents folder watching, `getpeereid`-based peer credentials, `osascript` notifications and the 104-byte socket path limit. Run `cargo test --workspace` on your Mac first.
-- **`ambar service install` / `uninstall` haven't been run** against a real launchd or systemd user session. The container has no user session manager.
-- **The cross-user check is tested as a function only.** The peer-uid rule is unit-tested, but no connection from a second real user was attempted, because the container has only one user.
-- **CI hasn't run on GitHub.**
-- **This is not a security audit.** 67 passing tests don't establish production security. Still to do:
-  - adversarial testing: fuzzing the protocol and workflow parser, races in path resolution
-  - review of the dependency tree beyond `cargo audit`
-  - platform-specific testing on macOS and Fedora
+1. **The OS image has never been built or booted.** This environment had no access to Fedora's registries and no KVM or QEMU. The first real build, disk image and boot are in `.github/workflows/os-image.yml`. Push to GitHub and check that job.
+2. **macOS:** nothing has run on macOS (FSEvents, launchd, `osascript`, peer credentials). Run `bash scripts/verify.sh` on the Mac.
+3. **Real LLMs:** the AI builder was never called against a real model. Only mock servers that copy each API's request and response shape. Prompt quality with real models is unmeasured.
+4. **Real Plasma:** the Plasma look-and-feel, panel layout script, colour schemes and SDDM background were never loaded in a Plasma session. They are only syntax- and schema-checked.
+5. **Login and boot:** `ambar service install` (launchd/systemd enable at login) was never run against a real session manager.
+6. **Hardware:** no physical hardware has been tested.
+7. **Security review:** this is not a security audit. Still needed:
+   - fuzzing (protocol frames, workflow TOML, package JSON)
+   - an external review of the agent authorization and package trust model
+   - SELinux confinement for `ambard`
+   - image signing
 
-## Remaining work before Phase 4
+## Known gaps (by design or deferred)
 
-1. Run the suite on macOS, then exercise `service install` on a Mac and on Fedora.
-2. Fuzz `protocol::read_frame` / `Request` parsing and `Workflow::from_toml` (cargo-fuzz).
-3. Approvals over IPC, so background sensitive actions can ask instead of needing `--allow-sensitive`.
-4. Trash listing and restore (`ambar trash list/restore`).
-5. Scoped client identities on the socket. These must exist before AI agents (Phase 6) are allowed to connect.
-6. Optional: systemd `WatchdogSec` heartbeat.
+- **Approvals:** a sensitive action running in the background can't ask you at that moment. It needs `--allow-sensitive` up front. Interactive approvals over IPC to the Automation Center are the next step.
+- **Packages:** packages can't add new action types. That's deliberate, to keep the closed action set. Extending actions needs sandboxing (WASM or Podman).
+- **Missed runs:** runs missed while `ambard` was stopped are not caught up.
+- **Path races:** a same-user attacker who can swap a folder for a symlink between the permission check and the file operation could race the check. Using `openat`-style resolution would close this.
+- **Undecided:** a global search or KRunner integration, and the AI assistant inside the Plasma shell itself, are not built.
+- **Rebranding and recovery:** the Plymouth splash and installer still look like Fedora. There's no recovery partition beyond bootc rollback.
 
-## Technical risks
+## Next steps, in order
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| macOS behaviour differs from Linux (FSEvents, launchd) | High until tested | Run the suite on the Mac now; macOS runner in CI |
-| Same-user processes can drive the socket | Medium now, high once agents exist | Scoped tokens per client before Phase 6 |
-| AI-generated workflows (Phase 4) | High | Must go through `validate` + consent + grant; there is no exec action |
-| `ProtectSystem=strict` limits writes to home under systemd | Low | Documented; configurable |
-| Scope: a full OS | Very high | Keep shipping working vertical slices |
+1. Push the repo. Make the `ci` and `os-image` workflows green, and fix whatever the first real image build and boot turns up.
+2. Run `scripts/verify.sh` on the Mac.
+3. Boot the ISO on one real laptop. Fill in the hardware table in `docs/os-image.md`.
+4. Try `ambar ai create` with a real API key or a local Ollama model, and tune the prompt.
+5. Fuzz the parsers, add cosign signing for images, and write an SELinux module for `ambard`.

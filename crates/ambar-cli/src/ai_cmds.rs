@@ -40,7 +40,7 @@ pub enum AiCmd {
     Create {
         /// What the automation should do.
         description: Vec<String>,
-        /// Where to save the workflow (default: ./<id>.toml).
+        /// Where to save the workflow (default: ./ID.toml).
         #[arg(long, short)]
         output: Option<PathBuf>,
         /// After saving, add it to the running service (asks for permission consent).

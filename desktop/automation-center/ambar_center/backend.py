@@ -240,7 +240,8 @@ class Backend(QObject):
 
         def work() -> dict:
             env = {**os.environ, "AMBAR_DATA_DIR": str(self._data_dir)}
-            proc = subprocess.run([self._ambar, "ai", "create", "--json", text],
+            # "--" ends option parsing: a description like "--add" stays text.
+            proc = subprocess.run([self._ambar, "ai", "create", "--json", "--", text],
                                   capture_output=True, text=True, timeout=300, env=env)
             if proc.returncode != 0:
                 msg = proc.stderr.strip().splitlines()

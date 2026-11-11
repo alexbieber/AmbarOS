@@ -172,6 +172,28 @@ def test_ai_draft_review_and_add(ui, world, tmp_path):
     del os.environ["AMBAR_AI_SCRIPT"]
 
 
+def test_descriptions_are_never_parsed_as_flags(ui, world, tmp_path):
+    app, win, backend, warnings, tmp = ui
+    script = tmp_path / "script.txt"
+    script.write_text(wf(tmp, "flag-test", "Flag test").join(["```toml\n", "\n```"]))
+    os.environ["AMBAR_AI_SCRIPT"] = str(script)
+    backend._ambar = str(BIN / "ambar")
+    got, failed = [], []
+    backend.draftReady.connect(lambda d: got.append(d))
+    backend.draftFailed.connect(lambda m: failed.append(m))
+    out = tmp_path / "should-not-exist.toml"
+    backend.describe(f"--add --enable --output {out}")
+    deadline = time.time() + 30
+    while not got and not failed and time.time() < deadline:
+        pump(app, 0.1)
+    del os.environ["AMBAR_AI_SCRIPT"]
+    assert got and not failed, failed
+    assert not out.exists(), "description was parsed as --output"
+    _, data = world
+    with Client(data) as c:
+        assert all(w["id"] != "flag-test" for w in c.list_workflows()), "description was parsed as --add"
+
+
 def test_disconnected_state(tmp_path):
     from ambar_center.backend import Backend
 

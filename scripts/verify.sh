@@ -15,6 +15,13 @@ if grep -qE "FAILED|panicked" /tmp/ambar-test.log; then echo "TESTS FAILED — f
 total=$(grep "^test result" /tmp/ambar-test.log | awk '{p+=$4} END {print p}')
 echo "all tests passed: $total"
 
+step "python: SDK, Automation Center, Plasma theme, OS recipe"
+if python3 -c "import PySide6, pytest" 2>/dev/null; then
+  QT_QPA_PLATFORM=offscreen python3 -m pytest -q sdk/python/tests desktop os/tests
+else
+  echo "skipped (pip install PySide6-Essentials pytest to run them)"
+fi
+
 step "service smoke test (temporary data dir)"
 cargo build --workspace --locked -q
 T=$(mktemp -d /tmp/ambar.XXXXXX); export AMBAR_DATA_DIR="$T/d" AMBARD_NOTIFY=log

@@ -1,4 +1,29 @@
-# Automation engine architecture
+# Ambar architecture
+
+## System overview
+
+```
+┌──────────────────────── Ambar Desktop (KDE Plasma 6, Ambar look) ────────────────────────┐
+│  Automation Center (Qt/QML, owner)      ambar CLI (owner)      Agents (scoped tokens)    │
+└───────────────┬──────────────────────────────┬────────────────────────┬──────────────────┘
+                │        local socket, JSON lines, 3-layer auth          │ SDK (Python/Rust)
+                ▼                              ▼                        ▼
+        ┌──────────────────────────── ambard (systemd/launchd user service) ───────────────┐
+        │  authorize(principal, request) · audit · rate limits · proposals · agent memory │
+        │  restore at start · graceful drain · single-instance lock                       │
+        │  ┌───────────────────────── ambar-automation Engine ──────────────────────────┐ │
+        │  │ workflows · triggers (schedule, folder) · closed action set · grants       │ │
+        │  │ run-time path checks · risk review · history + audit (SQLite)              │ │
+        │  └────────────────────────────────────────────────────────────────────────────┘ │
+        └─────────────────────────────────────────────────────────────────────────────────┘
+   ambar-ai: description → draft TOML → validate/repair → risk review → human consent
+   ambar-pkg: signed .ambarpkg → verify → trust by key → consent → register
+   os/: bootc image = Fedora 45 Kinoite + all of the above, atomic updates/rollback
+```
+
+**One rule runs through every layer: nothing gets privileges by being generated, downloaded or proposed.** AI drafts, agent proposals and packages all end up as workflow TOML. That TOML passes the same validation and risk review, and needs the same explicit human grant. At run time, the engine checks every path against that grant.
+
+## Automation engine
 
 ## Components
 

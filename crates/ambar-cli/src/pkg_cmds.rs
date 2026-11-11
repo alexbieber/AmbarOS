@@ -26,7 +26,7 @@ pub enum PkgCmd {
         /// Signing key: a path, or a name under ~/.config/ambar/keys.
         #[arg(long)]
         key: String,
-        /// Output file (default: <name>-<version>.ambarpkg).
+        /// Output file (default: NAME-VERSION.ambarpkg).
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
