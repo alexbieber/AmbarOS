@@ -10,9 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtWidgets import QApplication, QCheckBox, QHBoxLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
 
 CLI = shutil.which("ambar-clean") or str(Path(__file__).resolve().parent / "ambar-clean")
 
@@ -25,60 +24,102 @@ def _clean():
     return mod
 
 
+sys.path[:0] = [str(p) for p in (Path(__file__).resolve().parents[1] / "share/python", Path("/usr/lib/ambar/python"))
+                if (p / "ambar_ui.py").exists()]
+import ambar_ui as ui  # noqa: E402
+
+ICON = Path(__file__).with_name("ambar-clean.svg")
+
+
 class CleanWindow(QMainWindow):
     def __init__(self, runner=None):
         super().__init__()
         self.c = _clean()
         self.runner = runner or self.run_in_terminal
         self.setWindowTitle("Ambar Clean")
-        self.setWindowIcon(QIcon.fromTheme("ambar-clean", QIcon.fromTheme("edit-clear-all")))
-        self.resize(760, 520)
-        root = QWidget()
-        v = QVBoxLayout(root)
-        self.total = QLabel()
-        f = QFont()
-        f.setPointSize(22)
-        f.setBold(True)
-        self.total.setFont(f)
-        v.addWidget(self.total)
-        v.addWidget(QLabel("Everything ticked is rebuilt or re-downloaded when it's needed again. Emptying the Trash is permanent."))
-        self.grid = QGridLayout()
-        self.grid.setColumnStretch(1, 1)
-        v.addLayout(self.grid)
-        v.addStretch(1)
-        row = QHBoxLayout()
-        self.rescan = QPushButton(QIcon.fromTheme("view-refresh"), "Scan again")
+        self.setWindowIcon(ui.app_icon("ambar-clean", ICON))
+        self.resize(860, 640)
+        page = ui.Page("Clean up", "Everything ticked is rebuilt or re-downloaded when it's needed again.")
+        page.setObjectName("AmbarContent")
+        self.rescan = ui.button("Scan again", icon="view-refresh")
         self.rescan.clicked.connect(self.scan)
-        self.go = QPushButton(QIcon.fromTheme("edit-clear-all"), "Clean")
+        page.actions.addWidget(self.rescan)
+
+        hero = ui.Card(padding=20)
+        h = QHBoxLayout()
+        h.setSpacing(18)
+        logo = QLabel()
+        logo.setPixmap(ui.app_icon("ambar-clean", ICON).pixmap(QSize(56, 56)))
+        h.addWidget(logo)
+        tv = QVBoxLayout()
+        tv.setSpacing(2)
+        tv.addWidget(ui.label("CAN BE FREED", "section"))
+        self.total = ui.label("", "hero")
+        tv.addWidget(self.total)
+        self.count = ui.label("", "muted")
+        tv.addWidget(self.count)
+        h.addLayout(tv, 1)
+        self.go = ui.button("Clean", "primary", "edit-clear-all")
+        self.go.setMinimumWidth(130)
         self.go.clicked.connect(self.clean)
-        row.addStretch(1)
-        row.addWidget(self.rescan)
-        row.addWidget(self.go)
-        v.addLayout(row)
-        self.setCentralWidget(root)
+        h.addWidget(self.go, 0, Qt.AlignVCenter)
+        hero.body.addLayout(h)
+        page.body.addWidget(hero)
+        page.section("What can go")
+        self.listcard = ui.Card(padding=6)
+        self.grid = QVBoxLayout()
+        self.grid.setSpacing(0)
+        self.listcard.body.addLayout(self.grid)
+        page.body.addWidget(self.listcard)
+        page.body.addStretch(1)
+        self.setCentralWidget(page)
         self.boxes: dict[str, QCheckBox] = {}
         self.scan()
 
     def scan(self) -> None:
-        while self.grid.count():
-            w = self.grid.takeAt(0).widget()
-            if w:
-                w.deleteLater()
+        def clear(layout):
+            while layout.count():
+                it = layout.takeAt(0)
+                if it.widget():
+                    it.widget().deleteLater()
+                elif it.layout():
+                    clear(it.layout())
+        clear(self.grid)
         self.items = self.c.items()
         self.boxes = {}
-        for r, i in enumerate(self.items):
-            box = QCheckBox(i.title)
+        for n, i in enumerate(self.items):
+            if n:
+                self.grid.addWidget(ui.divider())
+            row = QHBoxLayout()
+            row.setContentsMargins(12, 10, 14, 10)
+            row.setSpacing(12)
+            box = QCheckBox()
             box.setChecked(i.safe and self.c.worth(i))
             box.setEnabled(self.c.worth(i))
             box.toggled.connect(self.update_total)
+            box.setAccessibleName(i.title)
             self.boxes[i.id] = box
-            amount = self.c.human(i.size) if i.size else (f"{i.count} to remove" if i.count else "nothing")
-            about = QLabel(f"<span style='color:gray'>{i.about}</span>")
-            about.setWordWrap(True)
-            size = QLabel(f"<b>{amount}</b>")
-            self.grid.addWidget(box, r, 0)
-            self.grid.addWidget(about, r, 1)
-            self.grid.addWidget(size, r, 2, Qt.AlignRight)
+            row.addWidget(box, 0, Qt.AlignTop)
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            title = QHBoxLayout()
+            title.setSpacing(8)
+            title.addWidget(ui.label(i.title, "cardtitle"))
+            if not i.safe:
+                title.addWidget(ui.badge("Permanent", "warn"))
+            title.addStretch(1)
+            text.addLayout(title)
+            about = ui.label(i.about, "muted", wrap=True)
+            about.setTextFormat(Qt.PlainText)
+            text.addWidget(about)
+            row.addLayout(text, 1)
+            amount = self.c.human(i.size) if i.size else (f"{i.count} to remove" if i.count else "Nothing")
+            size = ui.label(amount, "cardtitle" if self.c.worth(i) else "muted")
+            row.addWidget(size, 0, Qt.AlignTop | Qt.AlignRight)
+            holder = QWidget()
+            holder.setLayout(row)
+            holder.mousePressEvent = lambda _e, b=box: b.isEnabled() and b.toggle()
+            self.grid.addWidget(holder)
         self.update_total()
 
     def chosen(self) -> list[str]:
@@ -86,8 +127,11 @@ class CleanWindow(QMainWindow):
 
     def update_total(self) -> None:
         total = sum(i.size for i in self.items if i.id in self.chosen())
-        self.total.setText(f"{self.c.human(total)} can be freed")
-        self.go.setEnabled(bool(self.chosen()))
+        self.total.setText(self.c.human(total))
+        n = len(self.chosen())
+        self.count.setText(f"{n} item{'s' if n != 1 else ''} selected. Emptying the Trash is permanent." if n
+                           else "Nothing selected.")
+        self.go.setEnabled(bool(n))
 
     def clean(self) -> None:
         args = ["run", *self.chosen()]
@@ -112,6 +156,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Ambar Clean")
     app.setDesktopFileName("os.ambar.Clean")
+    ui.apply(app)
     w = CleanWindow()
     w.show()
     return app.exec()

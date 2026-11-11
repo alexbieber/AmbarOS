@@ -56,6 +56,14 @@ _Last updated: 2026-11-11_
   - nmap host addresses were lost
 - ⚠ Not yet seen in a booted ISO; the build recipe installs them and the boot test checks they're there.
 
+**One design for every Ambar app** (`desktop/share/python/ambar_ui.py`):
+
+- The five tools use the Automation Center's colours, sidebar, page titles, cards, badges and Inter font, in light and dark.
+- ✅ Every text and background pair passes WCAG AA, and body text passes AAA; a test checks it in both themes.
+- ✅ Each app was rendered offscreen in both themes and looked at (`scripts/demo/tool_shots.py` makes the screenshots in the docs). Their existing tests pass unchanged.
+- ✅ The font settings (`/etc/fonts/local.conf`: greyscale antialiasing, slight hinting, Inter for sans-serif) were loaded by fontconfig here and resolve as intended.
+- ⚠ GTK apps using Breeze and the same font, and the new font settings, haven't been seen in a booted image yet; that needs the next ISO build.
+
 **Found by booting it, and fixed in the recipe:**
 
 - **Black screen in the VM:** QEMU's emulated `-cpu max` crashed Mesa's software renderer. The test now emulates a plain x86-64-v2 CPU.
@@ -84,7 +92,8 @@ _Last updated: 2026-11-11_
 | Apps and install-anything (Store, `.deb`, Flatpak, Snap, AppImage, Wine) | ✅ installed and launch · ⚠ Flathub needs internet on first boot |
 | Installer (Calamares, Ambar branding) | ✅ full install in QEMU (Erase disk, 43/43 steps) · ✅ installed system boots to login and logs in · ⚠ installed desktop not drawn under emulation, under investigation |
 | Security tools (Kali's default set, `ambar-sec`, Ambar Security app) | ✅ Ubuntu and Python parts installed for real on 26.04 · ✅ checksum and service rules tested · ⚠ release binaries, Kali container and the Security ISO run only in CI so far |
-| Ambar's own tools (Recon, Workbench, Guard, Clean, Share) | ✅ tested against real servers, files and a fake system · ⚠ not yet booted in the ISO |
+| Ambar's own tools (Recon, Workbench, Guard, Clean, Share) | ✅ tested against real servers, files and a fake system · ✅ one shared design, light and dark, contrast-tested · ⚠ not yet booted in the ISO |
+| Crisp text everywhere (fontconfig, KDE and GTK settings) | ✅ fontconfig file checked here · ⚠ not yet seen in a booted image |
 | Atomic edition (Fedora Kinoite, bootc, ARM64, Raspberry Pi) | ⚠ experimental: recipe written, built only in CI |
 | Docs site, community files | ✅ strict build; documented commands checked against the real CLI |
 

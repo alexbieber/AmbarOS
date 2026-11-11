@@ -39,6 +39,7 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | Mission Control | All windows at a glance (Meta+W or the top-left screen corner) | ✅ |
 | Window buttons | Red, yellow and green traffic lights on the left | ✅ |
 | Light and dark | One switch changes colours, panels, icons and window frames | ✅ |
+| Crisp, consistent text | Inter everywhere, greyscale antialiasing with slight hinting (like macOS); GTK apps (Firefox, GIMP…) use the same font, icons and left-hand window buttons | ✅ font settings checked · ⚠️ not yet seen in a booted image |
 | Touchpad gestures | Plasma's three- and four-finger gestures | ⚠️ needs a touchpad |
 
 ## 3. Apps out of the box
@@ -109,6 +110,7 @@ Details: [Ambar's own tools](docs/ambar-tools.md).
 | **Ambar Guard** (`ambar-guard` + app) | 11 security checks with a score, one-click fixes, live per-app network connections from `/proc` | ✅ tested on a fake system and run on a real one |
 | **Ambar Clean** (`ambar-clean` + app) | Safe disk clean-up with sizes; Trash only on request | ✅ tested, including symlinks that must not be followed |
 | **Ambar Share** (`ambar-share` + app) | Send files on the local network with an unguessable link and QR code, time limit, one-time option | ✅ tested: wrong links, expiry, one-time |
+| One design for all of them | Sidebar, page titles, cards, badges and the Inter font of the Automation Center; light and dark; every colour pair passes WCAG AA | ✅ contrast tested; every app rendered in both themes |
 | All of the above in Launchpad and the ISO | | ✅ in the build recipe and boot test · ⚠️ not yet seen in a booted image |
 
 ## 8. For developers and testers

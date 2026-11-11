@@ -22,7 +22,7 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
 | `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
-| `desktop/share/` | `.desktop` files, autostart, icons | |
+| `desktop/share/` | `.desktop` files, autostart, icons; `python/ambar_ui.py`, the shared design for Ambar's Qt Widgets apps | Python |
 | `crates/` | Rust workspace: `ambar-automation` (engine), `ambar-service` (`ambard`), `ambar-cli` (`ambar`), `ambar-ai`, `ambar-pkg`, `ambar-recon` (scanner and the shared scope checker) | Rust |
 | `sdk/python/` | Python SDK for talking to `ambard` | Python |
 | `marketplace/` | Signed example packages and the index | TOML, JSON |
@@ -75,6 +75,7 @@ After changing anything in `desktop/plasma/` or `os/ubuntu/hooks|overlay`, rebui
 - **Security tools:** add or change tools only in `desktop/security/catalog.toml`. Prefer, in order: Ubuntu package (`apt`), `pipx`, `github` (only if the release publishes checksums), `kali` (container). A test fails if any tool in Kali's default set isn't covered or listed under `[excluded]` with a reason. Servers in the set must be listed under `[services] disable`. These tools are never callable from automations or the AI.
 - **Scope:** every Ambar tool that touches other systems checks targets with `ambar-recon`'s scope code (`crates/ambar-recon/src/scope.rs`), including `ambar-engage`, which calls `ambar-recon scope`. Don't write a second scope checker, and fail closed if the check can't run. Without a scope file, only this computer may be scanned.
 - **Editions:** `FLAVOR=security` builds Ambar OS Security (Default tier preinstalled). Use a separate `WORK` per flavour; `iso` refuses a rootfs of the other flavour.
+- **App design:** Ambar's Qt Widgets apps call `ambar_ui.apply(app)` and build their window from `ambar_ui.Shell`, `Page`, `Card`, `Stat` and `badge`, so they match the Automation Center. Don't hard-code colours; use `ambar_ui.theme()`. `scripts/demo/tool_shots.py` renders each app light and dark for the docs.
 - **Calamares runs 43 steps.** Its log is at `/root/.cache/calamares/session.log` in the live session.
 
 ## Style

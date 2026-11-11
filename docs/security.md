@@ -18,10 +18,16 @@ This mirrors Kali, whose normal image ships its *default* metapackage and lets y
 
 Open **Launchpad → Security → Ambar Security** (or search for "Security").
 
-![The Ambar Security app](images/os/security-app.jpg)
+=== "Light"
+
+    ![The Ambar Security app](images/os/security-app.jpg)
+
+=== "Dark"
+
+    ![The Ambar Security app in dark mode](images/os/security-app-dark.jpg)
 
 1. Pick a **tier**: Top 10, Default (recommended), Large or Everything.
-2. Tick extra **categories** or single tools if you want.
+2. Tick extra **categories**, or single tools on the **All tools** page.
 3. Click **Install**. A terminal window shows every step, and asks for your password for the system part.
 
 Installed tools appear in **Launchpad → Security**, sorted into Kali's categories: Information Gathering, Vulnerability Analysis, Web, Database, Passwords, Wireless, Reverse Engineering, Exploitation, Sniffing & Spoofing, Post Exploitation, Forensics, Reporting and Social Engineering. Command-line tools open a terminal showing their help, like Kali's menu.

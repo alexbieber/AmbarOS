@@ -30,6 +30,7 @@ os/ubuntu/
     - red, yellow and green window buttons on the left
     - Spotlight-style search on Meta+Space, and Mission Control (Overview)
     - light and dark themes covering colours, Papirus icons, the Inter font, wallpaper, login screen and boot animation
+    - crisp text: greyscale antialiasing with slight hinting, like macOS, set for fontconfig, KDE and GTK alike; GTK apps use Breeze, Inter and left-hand window buttons so they match
 - **Apps (all of Kubuntu's selection):**
     - Files (Dolphin), Terminal (Konsole), Kate, Okular, Gwenview, Elisa, Haruna, Spectacle, Ark, KCalc
     - LibreOffice, KMail and KOrganizer, KDE Connect

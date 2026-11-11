@@ -308,3 +308,26 @@ def test_ambar_tools_are_in_the_image():
     for d in ["workbench", "guard", "utils"]:
         assert list((repo / "desktop" / d).glob("os.ambar.*.desktop")), d
     assert "--bin ambar-recon" in (repo / ".github/workflows/os-ubuntu.yml").read_text()
+
+
+def test_crisp_fonts_and_matching_gtk_apps():
+    h = (U / "hooks" / "20-desktop.chroot").read_text()
+    conf = h.split("/etc/fonts/local.conf <<'CFG'\n", 1)[1].split("\nCFG", 1)[0]
+    import xml.dom.minidom
+    xml.dom.minidom.parseString(conf.split("\n", 2)[2])  # well-formed
+    for want in ("<const>hintslight</const>", "<const>none</const>", "<family>Inter</family>", "JetBrains Mono"):
+        assert want in conf, want
+    assert "XftHintStyle=hintslight" in h and "XftSubPixel=none" in h, "KDE apps use the same rendering"
+    assert 'for v in 3.0 4.0' in h and "gtk-font-name=Inter 10" in h and "gtk-xft-hintstyle=hintslight" in h
+    assert "gtk-decoration-layout=close,minimize,maximize:" in h, "GTK traffic lights on the left, like KDE's"
+    assert {"breeze-gtk-theme", "kde-config-gtk-style", "fonts-jetbrains-mono"} <= set(listfile(U / "packages.txt"))
+
+
+def test_ambar_ui_ships_with_the_tools():
+    b = (U / "build.sh").read_text()
+    assert '"$ROOT/usr/lib/ambar/python/ambar_ui.py"' in b and "import ambar_ui" in b
+    repo = U.parents[1]
+    for app in ["security/ambar-security", "workbench/ambar-workbench", "guard/ambar-guard-app",
+                "utils/ambar-clean-app", "utils/ambar-share-app"]:
+        src = (repo / "desktop" / app).read_text()
+        assert "/usr/lib/ambar/python" in src and "import ambar_ui as ui" in src and "ui.apply(app)" in src, app

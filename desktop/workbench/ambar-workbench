@@ -6,6 +6,7 @@ checked against the engagement's scope before anything is sent.
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import shlex
@@ -15,11 +16,10 @@ import tomllib
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
-                               QHeaderView, QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox,
-                               QPlainTextEdit, QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget,
-                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox, QPlainTextEdit,
+                               QTableWidgetItem, QVBoxLayout)
 
 ENGAGE = shutil.which("ambar-engage") or str(Path(__file__).resolve().parent / "ambar-engage")
 HOME = Path(os.environ.get("AMBAR_ENGAGEMENTS", Path.home() / "Engagements"))
@@ -36,14 +36,28 @@ TOOLS = [
     ("nikto", "nikto: web server checks", ""),
     ("testssl", "testssl.sh: full TLS audit", ""),
 ]
-SEV_COLOURS = {"critical": "#7A1F1F", "high": "#C0392B", "medium": "#D9822B", "low": "#C9A227", "info": "#6B7A8F"}
+SEVERITIES = ["critical", "high", "medium", "low", "info"]
+ICON = Path(__file__).with_name("ambar-workbench.svg")
+
+sys.path[:0] = [str(p) for p in (Path(__file__).resolve().parents[1] / "share/python", Path("/usr/lib/ambar/python"))
+                if (p / "ambar_ui.py").exists()]
+import ambar_ui as ui  # noqa: E402
 
 
 class NewDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New engagement")
-        form = QFormLayout(self)
+        self.setMinimumWidth(560)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(24, 20, 24, 20)
+        v.setSpacing(14)
+        v.addWidget(ui.label("New engagement", "title"))
+        v.addWidget(ui.label("Write down what you're allowed to test. Every scan is checked against this scope.",
+                             "subtitle", wrap=True))
+        form = QFormLayout()
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.name = QLineEdit(placeholderText="ACME external test")
         self.include = QLineEdit(placeholderText="203.0.113.0/24, acme.example, *.acme.example")
         self.exclude = QLineEdit(placeholderText="optional: 203.0.113.1, vpn.acme.example")
@@ -54,13 +68,15 @@ class NewDialog(QDialog):
         form.addRow("Excluded", self.exclude)
         form.addRow("Authorised by", self.auth)
         form.addRow("Ends", self.ends)
-        note = QLabel("Only test systems you own or have written permission to test. Every scan is checked against this scope.")
-        note.setWordWrap(True)
-        form.addRow(note)
+        v.addLayout(form)
+        v.addWidget(ui.label("Only test systems you own or have written permission to test.", "notice", wrap=True))
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok = buttons.button(QDialogButtonBox.Ok)
+        ok.setText("Create")
+        ok.setProperty("kind", "primary")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+        v.addWidget(buttons)
 
     def args(self) -> list[str]:
         split = lambda s: [x.strip() for x in s.replace("\n", ",").split(",") if x.strip()]  # noqa: E731
@@ -77,31 +93,40 @@ class Workbench(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ambar Workbench")
-        self.setWindowIcon(QIcon.fromTheme("ambar-workbench", QIcon.fromTheme("ambar-security")))
-        self.resize(1180, 760)
+        self.setWindowIcon(ui.app_icon("ambar-workbench", ICON))
+        self.resize(1180, 780)
         self.proc: QProcess | None = None
+        self._findings: list[dict] = []
+        self.tabs = ui.Shell("Workbench", "Security engagements", "ambar-workbench", ICON)
 
-        left = QWidget()
-        lv = QVBoxLayout(left)
-        lv.addWidget(QLabel("<b>Engagements</b>"))
+        # Sidebar: engagements
+        self.tabs.side.addSpacing(10)
+        self.tabs.side.addWidget(ui.label("ENGAGEMENTS", "section"))
         self.list = QListWidget()
+        self.list.setObjectName("AmbarNav")
+        self.list.setFrameShape(QFrame.NoFrame)
         self.list.currentTextChanged.connect(self.select)
-        lv.addWidget(self.list, 1)
-        new = QPushButton(QIcon.fromTheme("list-add"), "New engagement…")
+        self.tabs.side.addWidget(self.list, 1)
+        new = ui.button("New engagement…", "primary", "list-add")
         new.clicked.connect(self.new_engagement)
-        lv.addWidget(new)
+        self.tabs.footer.addWidget(new)
 
-        self.tabs = QTabWidget()
         # Scope
+        scope = ui.Page("Scope", "What this engagement may touch. Every tool here checks it first.")
+        card = ui.Card(padding=22)
         self.scope_view = QLabel()
         self.scope_view.setTextFormat(Qt.RichText)
         self.scope_view.setWordWrap(True)
         self.scope_view.setAlignment(Qt.AlignTop)
-        self.tabs.addTab(self.scope_view, "Scope")
+        self.scope_view.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        card.body.addWidget(self.scope_view)
+        scope.body.addWidget(card)
+        scope.body.addStretch(1)
+        self.tabs.add_page("Scope", scope, "crosshairs")
+
         # Run
-        run = QWidget()
-        rv = QVBoxLayout(run)
-        row = QHBoxLayout()
+        run = ui.Page("Run", "Scan a target in scope. Output from Recon, nmap and nuclei becomes findings.")
+        rc = ui.Card(padding=16)
         self.tool = QComboBox()
         for key, label, default in TOOLS:
             self.tool.addItem(label, (key, default))
@@ -109,59 +134,64 @@ class Workbench(QMainWindow):
         self.target = QLineEdit(placeholderText="Target: host, IP, URL or domain (must be in scope)")
         self.extra = QLineEdit(TOOLS[0][2])
         self.extra.setPlaceholderText("Extra arguments")
-        self.run_btn = QPushButton(QIcon.fromTheme("media-playback-start"), "Run")
+        self.run_btn = ui.button("Run", "primary", "media-playback-start")
         self.run_btn.clicked.connect(self.run_tool)
-        self.stop_btn = QPushButton(QIcon.fromTheme("process-stop"), "Stop")
+        self.stop_btn = ui.button("Stop", "danger", "process-stop")
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(lambda: self.proc and self.proc.kill())
-        row.addWidget(self.tool, 2)
-        row.addWidget(self.target, 3)
-        row.addWidget(self.extra, 2)
-        row.addWidget(self.run_btn)
-        row.addWidget(self.stop_btn)
-        rv.addLayout(row)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
+        for c, (text, w) in enumerate((("Tool", self.tool), ("Target", self.target), ("Arguments", self.extra))):
+            grid.addWidget(ui.label(text.upper(), "section"), 0, c)
+            grid.addWidget(w, 1, c)
+        grid.addWidget(self.run_btn, 1, 3)
+        grid.addWidget(self.stop_btn, 1, 4)
+        grid.setColumnStretch(0, 3)
+        grid.setColumnStretch(1, 4)
+        grid.setColumnStretch(2, 3)
+        rc.body.addLayout(grid)
+        run.body.addWidget(rc)
         self.output = QPlainTextEdit(readOnly=True)
-        mono = QFont("monospace")
-        mono.setStyleHint(QFont.Monospace)
-        self.output.setFont(mono)
-        rv.addWidget(self.output, 1)
-        self.tabs.addTab(run, "Run")
+        self.output.setProperty("console", True)
+        self.output.setPlaceholderText("Output appears here.")
+        run.body.addWidget(self.output, 1)
+        self.tabs.add_page("Run", run, "media-playback-start")
+
         # Findings
-        fw = QWidget()
-        fv = QVBoxLayout(fw)
-        self.summary = QLabel()
-        fv.addWidget(self.summary)
-        self.findings = QTableWidget(0, 4)
-        self.findings.setHorizontalHeaderLabels(["Severity", "Target", "Finding", "Source"])
-        self.findings.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.findings.verticalHeader().hide()
-        self.findings.setEditTriggers(QTableWidget.NoEditTriggers)
+        fw = ui.Page("Findings", "Found automatically from scan output, or added with ambar-engage findings --add.")
+        self.stats = {s: ui.Stat(s.capitalize(), "0", s) for s in SEVERITIES}
+        fw.body.addLayout(ui.row(*self.stats.values(), spacing=12))
+        self.findings = ui.table(["Severity", "Target", "Finding", "Source"], stretch=2)
         self.findings.cellClicked.connect(self.show_detail)
-        fv.addWidget(self.findings, 2)
-        self.detail = QLabel()
-        self.detail.setWordWrap(True)
-        fv.addWidget(self.detail)
-        self.tabs.addTab(fw, "Findings")
+        fw.body.addWidget(self.findings, 2)
+        dc = ui.Card(padding=16)
+        self.detail = ui.label("Select a finding to see its details.", "muted", wrap=True)
+        self.detail.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        dc.body.addWidget(self.detail)
+        fw.body.addWidget(dc)
+        self.tabs.add_page("Findings", fw, "dialog-warning")
+
         # Report
-        rw = QWidget()
-        rpv = QVBoxLayout(rw)
-        rpv.addWidget(QLabel("The report lists the engagement, scope, every finding by severity and the activity log."))
+        rw = ui.Page("Report", "The engagement, who authorised it, the scope, every finding by severity and the activity log.")
+        rcard = ui.Card("Create a report", "Written into the engagement folder and opened when it's ready.", padding=20)
         rrow = QHBoxLayout()
-        for fmt, label in (("pdf", "Create PDF report"), ("html", "Create HTML report"), ("md", "Create Markdown report")):
-            b = QPushButton(QIcon.fromTheme("document-export"), label)
+        rrow.setSpacing(10)
+        for fmt, label, kind in (("pdf", "PDF", "primary"), ("html", "HTML", None), ("md", "Markdown", None)):
+            b = ui.button(label, kind, "document-export")
+            b.setMinimumWidth(120)
             b.clicked.connect(lambda _=False, f=fmt: self.report(f))
             rrow.addWidget(b)
-        rpv.addLayout(rrow)
-        self.report_status = QLabel()
-        rpv.addWidget(self.report_status)
-        rpv.addStretch(1)
-        self.tabs.addTab(rw, "Report")
+        rrow.addStretch(1)
+        rcard.body.addLayout(rrow)
+        self.report_status = ui.label("", "muted", wrap=True)
+        self.report_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        rcard.body.addWidget(self.report_status)
+        rw.body.addWidget(rcard)
+        rw.body.addStretch(1)
+        self.tabs.add_page("Report", rw, "document-export")
 
-        split = QSplitter()
-        split.addWidget(left)
-        split.addWidget(self.tabs)
-        split.setStretchFactor(1, 4)
-        self.setCentralWidget(split)
+        self.setCentralWidget(self.tabs)
         self.reload()
 
     # ---------------------------------------------------------------- data
@@ -180,8 +210,9 @@ class Workbench(QMainWindow):
         if names:
             self.list.setCurrentRow(names.index(cur) if cur in names else 0)
         else:
-            self.scope_view.setText("<h3>No engagements yet</h3><p>Click <b>New engagement…</b> and write down what "
-                                    "you're allowed to test. Every tool here only touches targets in that scope.</p>")
+            self.scope_view.setText("<p style='font-size:15pt; font-weight:700'>No engagements yet</p><p>Click <b>New "
+                                    "engagement…</b> and write down what you're allowed to test. Every tool here only "
+                                    "touches targets in that scope.</p>")
 
     def select(self, name: str) -> None:
         if not name:
@@ -191,13 +222,19 @@ class Workbench(QMainWindow):
         d = HOME / name
         cfg = tomllib.loads((d / "scope.toml").read_text())
         e, s = cfg.get("engagement", {}), cfg.get("scope", {})
+        t = ui.theme()
+        esc = html.escape
+        chips = lambda xs, tone: " ".join(  # noqa: E731
+            f"<span style='background-color:{ui.mix(t['surface'], t.tone(tone), 0.14)}; color:{t.tone(tone)}; "
+            f"font-family:monospace'>&nbsp;{esc(str(x))}&nbsp;</span>" for x in xs) or f"<span style='color:{t['muted']}'>nothing</span>"
+        head = lambda text: f"<p style='color:{t['muted']}; font-size:8.5pt; font-weight:700; letter-spacing:1px'>{text}</p>"  # noqa: E731
         self.scope_view.setText(
-            f"<h2>{e.get('name', name)}</h2>"
-            f"<p><b>Authorised by:</b> {e.get('authorised_by', '—')}<br>"
-            f"<b>Period:</b> {e.get('starts', '—')} to {e.get('ends', 'open-ended')}</p>"
-            f"<p><b>In scope:</b><br>{'<br>'.join(s.get('include', []))}</p>"
-            f"<p><b>Excluded:</b><br>{'<br>'.join(s.get('exclude', [])) or 'nothing'}</p>"
-            f"<p style='color:gray'>Folder: {d}</p>")
+            f"<p style='font-size:17pt; font-weight:700'>{esc(str(e.get('name', name)))}</p>"
+            f"<p style='color:{t['muted']}'>Authorised by <b style='color:{t['text']}'>{esc(str(e.get('authorised_by', '—')))}</b>"
+            f" &nbsp;·&nbsp; {esc(str(e.get('starts', '—')))} to {esc(str(e.get('ends', 'open-ended')))}</p>"
+            f"{head('IN SCOPE')}<p style='line-height:160%'>{chips(s.get('include', []), 'good')}</p>"
+            f"{head('EXCLUDED')}<p style='line-height:160%'>{chips(s.get('exclude', []), 'bad')}</p>"
+            f"<p style='color:{t['muted']}; font-size:9pt'>Folder: {esc(str(d))}</p>")
         self.load_findings()
 
     def load_findings(self) -> None:
@@ -209,8 +246,8 @@ class Workbench(QMainWindow):
         self._findings = f
         self.findings.setRowCount(len(f))
         for r, x in enumerate(f):
-            sev = QTableWidgetItem(x["severity"].capitalize())
-            sev.setForeground(QColor(SEV_COLOURS.get(x["severity"], "#333")))
+            sev = QTableWidgetItem("●  " + x["severity"].capitalize())
+            sev.setForeground(QColor(ui.theme().tone(x["severity"])))
             bold = sev.font()
             bold.setBold(True)
             sev.setFont(bold)
@@ -218,13 +255,19 @@ class Workbench(QMainWindow):
                 self.findings.setItem(r, c, item)
         self.findings.resizeColumnToContents(0)
         self.findings.resizeColumnToContents(1)
-        counts = {s: sum(x["severity"] == s for x in f) for s in SEV_COLOURS}
-        self.summary.setText("  ".join(f"<span style='color:{SEV_COLOURS[s]}'><b>{n}</b> {s}</span>" for s, n in counts.items()))
+        self.findings.resizeColumnToContents(3)
+        for sv, stat in self.stats.items():
+            stat.set(str(sum(x["severity"] == sv for x in f)))
         self.tabs.setTabText(2, f"Findings ({len(f)})")
 
     def show_detail(self, row: int, _col: int) -> None:
         x = self._findings[row]
-        self.detail.setText(f"<b>{x['title']}</b> — {x['target']}<br>{x['detail'] or ''}<br><i>{x['source']}, {x['found']}</i>")
+        esc = html.escape
+        self.detail.setProperty("role", None)
+        ui.restyle(self.detail)
+        self.detail.setText(f"<p style='font-size:12pt; font-weight:650'>{esc(x['title'])}</p>"
+                            f"<p>{esc(x['target'])} &nbsp;·&nbsp; {esc(x['severity'])}</p><p>{esc(x['detail'] or '')}</p>"
+                            f"<p style='color:{ui.theme()['muted']}'>{esc(x['source'])}, {esc(x['found'])}</p>")
 
     # ---------------------------------------------------------------- actions
 
@@ -289,6 +332,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Ambar Workbench")
     app.setDesktopFileName("os.ambar.Workbench")
+    ui.apply(app)
     w = Workbench()
     w.show()
     return app.exec()

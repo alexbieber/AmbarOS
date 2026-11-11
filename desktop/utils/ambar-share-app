@@ -11,9 +11,9 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QGuiApplication, QIcon, QPixmap
+from PySide6.QtGui import QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QListWidget,
-                               QMainWindow, QPushButton, QVBoxLayout, QWidget)
+                               QListWidgetItem, QMainWindow)
 
 CLI = shutil.which("ambar-share") or str(Path(__file__).resolve().parent / "ambar-share")
 
@@ -26,6 +26,21 @@ def _share():
     return mod
 
 
+sys.path[:0] = [str(p) for p in (Path(__file__).resolve().parents[1] / "share/python", Path("/usr/lib/ambar/python"))
+                if (p / "ambar_ui.py").exists()]
+import ambar_ui as ui  # noqa: E402
+
+ICON = Path(__file__).with_name("ambar-share.svg")
+
+
+def size(n: float) -> str:
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if n < 1000 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "bytes" else f"{n:.1f} {unit}"
+        n /= 1000
+    return ""
+
+
 class ShareWindow(QMainWindow):
     def __init__(self, host: str | None = None):
         super().__init__()
@@ -33,40 +48,57 @@ class ShareWindow(QMainWindow):
         self.host = host
         self.server = None
         self.setWindowTitle("Ambar Share")
-        self.setWindowIcon(QIcon.fromTheme("ambar-share", QIcon.fromTheme("document-send")))
+        self.setWindowIcon(ui.app_icon("ambar-share", ICON))
         self.setAcceptDrops(True)
-        self.resize(640, 640)
-        root = QWidget()
-        v = QVBoxLayout(root)
-        v.addWidget(QLabel("<h2>Share files on this network</h2>Drop files here, then open the link (or scan the code) "
-                           "on a phone or computer on the same Wi-Fi."))
+        self.resize(920, 620)
+        page = ui.Page("Share files", "Send files to a phone or computer on the same Wi-Fi. Nothing goes through the internet.")
+        cols = QHBoxLayout()
+        cols.setSpacing(16)
+
+        files = ui.Card("Files", "Drop files anywhere in this window, or add them.")
         self.list = QListWidget()
-        v.addWidget(self.list, 1)
-        row = QHBoxLayout()
-        add = QPushButton(QIcon.fromTheme("list-add"), "Add files…")
+        self.list.setObjectName("AmbarList")
+        self.list.setMinimumHeight(180)
+        files.body.addWidget(self.list, 1)
+        add = ui.button("Add files…", icon="list-add")
         add.clicked.connect(self.pick)
+        clear = ui.button("Remove all", "ghost")
+        clear.clicked.connect(lambda: self.server or self.list.clear())
+        files.body.addLayout(ui.row(add, None, clear))
+        files.body.addWidget(ui.divider())
         self.minutes = QComboBox()
         for m in (10, 30, 60, 240):
-            self.minutes.addItem(f"for {m} minutes", m)
+            self.minutes.addItem(f"for {m} minutes" if m < 60 else f"for {m // 60} hour{'s' if m > 60 else ''}", m)
         self.minutes.setCurrentIndex(1)
-        self.once = QCheckBox("stop after one download")
-        self.start = QPushButton(QIcon.fromTheme("document-send"), "Share")
+        self.once = QCheckBox("Stop after one download")
+        files.body.addLayout(ui.row(ui.label("Available", "muted"), self.minutes, None, self.once))
+        self.start = ui.button("Share", "primary", "document-send")
+        self.start.setMinimumHeight(38)
         self.start.clicked.connect(self.toggle)
-        for w in (add, self.minutes, self.once):
-            row.addWidget(w)
-        row.addStretch(1)
-        row.addWidget(self.start)
-        v.addLayout(row)
+        files.body.addWidget(self.start)
+        cols.addWidget(files, 3)
+
+        link = ui.Card(padding=20)
+        link.setMinimumWidth(340)
+        link.body.addWidget(ui.label("SCAN TO DOWNLOAD", "section"), 0, Qt.AlignHCenter)
         self.qr = QLabel(alignment=Qt.AlignCenter)
-        v.addWidget(self.qr)
-        self.url = QLabel(alignment=Qt.AlignCenter)
+        self.qr.setMinimumSize(240, 240)
+        self.qr.setStyleSheet(f"background:{ui.theme()['surface2']}; border-radius:12px; color:{ui.theme()['muted']};")
+        self.qr.setText("The code appears here\nwhen you share.")
+        link.body.addWidget(self.qr, 1)
+        self.url = ui.label("", "mono", wrap=True)
+        self.url.setAlignment(Qt.AlignCenter)
         self.url.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        mono = QFont("monospace")
-        self.url.setFont(mono)
-        v.addWidget(self.url)
-        self.status = QLabel(alignment=Qt.AlignCenter)
-        v.addWidget(self.status)
-        self.setCentralWidget(root)
+        link.body.addWidget(self.url)
+        self.status = ui.label("Not sharing.", "muted", wrap=True)
+        self.status.setAlignment(Qt.AlignCenter)
+        link.body.addWidget(self.status)
+        cols.addWidget(link, 2)
+        page.body.addLayout(cols, 1)
+        note = ui.label("Each link holds 128 random bits and serves only the files listed. If the firewall is on, "
+                        "other devices need it allowed: see Ambar Guard.", "notice", wrap=True)
+        page.body.addWidget(note)
+        self.setCentralWidget(page)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
 
@@ -86,8 +118,9 @@ class ShareWindow(QMainWindow):
         for f in files:
             if f.is_file() and str(f) not in have:
                 have.add(str(f))
-                self.list.addItem(f.name)
-                self.list.item(self.list.count() - 1).setData(Qt.UserRole, str(f))
+                item = QListWidgetItem(QIcon.fromTheme("text-x-generic"), f"{f.name}    ·    {size(f.stat().st_size)}")
+                item.setData(Qt.UserRole, str(f))
+                self.list.addItem(item)
 
     def toggle(self) -> None:
         if self.server:
@@ -117,7 +150,7 @@ class ShareWindow(QMainWindow):
         png = subprocess.run(["qrencode", "-o", "-", "-s", "8", "-m", "2", url], capture_output=True).stdout
         pix = QPixmap()
         pix.loadFromData(png)
-        self.qr.setPixmap(pix)
+        self.qr.setPixmap(pix.scaled(240, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def tick(self) -> None:
         if not self.share.expired():
@@ -132,6 +165,7 @@ class ShareWindow(QMainWindow):
         self.timer.stop()
         self.start.setText("Share")
         self.qr.clear()
+        self.qr.setText("The code appears here\nwhen you share.")
         self.url.setText("")
         self.status.setText(f"Stopped after {self.share.downloads} download{'s' if self.share.downloads != 1 else ''}.")
 
@@ -140,6 +174,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Ambar Share")
     app.setDesktopFileName("os.ambar.Share")
+    ui.apply(app)
     w = ShareWindow()
     w.add_files([Path(a) for a in sys.argv[1:]])
     w.show()

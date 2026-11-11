@@ -10,6 +10,8 @@ Tools written for Ambar OS, not taken from another distribution. Each one is a c
 | **Ambar Clean** | `ambar-clean` | Launchpad → Utilities | Free disk space safely |
 | **Ambar Share** | `ambar-share` | Launchpad → Internet | Send files to a phone or computer on the same Wi-Fi |
 
+All five apps share one design with the Automation Center: a sidebar, large page titles, white cards, colour-coded badges and the Inter font. They follow the system's light or dark setting.
+
 !!! warning "Scope comes first"
     Recon and Workbench only touch targets in an **engagement scope** you write down, and refuse everything else. Without a scope they only scan your own computer. Only test systems you own or have written permission to test.
 
@@ -77,9 +79,15 @@ ambar-engage report --format pdf            # also md and html
 - Output of any other tool (ffuf, nikto, testssl, sslscan, whatweb…) is kept in `runs/`.
 - The **report** lists the engagement, who authorised it, the scope, findings by severity with details, and the activity log.
 
-The **Workbench app** does the same in a window: engagements on the left, then Scope, Run, Findings and Report tabs.
+The **Workbench app** does the same in a window: engagements in the sidebar, and Scope, Run, Findings and Report pages.
 
-![Ambar Workbench](images/os/workbench.jpg)
+=== "Light"
+
+    ![Ambar Workbench](images/os/workbench.jpg)
+
+=== "Dark"
+
+    ![Ambar Workbench in dark mode](images/os/workbench-dark.jpg)
 
 ## Ambar Guard
 
@@ -108,7 +116,13 @@ ambar-guard net --listening  # what can be reached from the network
 
 Each fix says what it does before it runs, and changes nothing else. Connections are read straight from the kernel (`/proc`), so `net` works without extra tools. Seeing other users' processes needs `sudo`.
 
-![Ambar Guard](images/os/guard.jpg)
+=== "Light"
+
+    ![Ambar Guard](images/os/guard.jpg)
+
+=== "Dark"
+
+    ![Ambar Guard in dark mode](images/os/guard-dark.jpg)
 
 ## Ambar Clean
 
@@ -129,7 +143,13 @@ The safe clean removes only things that are rebuilt or re-downloaded when needed
 
 It never follows a symbolic link out of a cache folder, and never touches folders it doesn't know.
 
-![Ambar Clean](images/os/clean.jpg)
+=== "Light"
+
+    ![Ambar Clean](images/os/clean.jpg)
+
+=== "Dark"
+
+    ![Ambar Clean in dark mode](images/os/clean-dark.jpg)
 
 ## Ambar Share
 
@@ -142,4 +162,10 @@ The link holds 128 random bits, so it can't be guessed. Only the files you named
 
 If **Ambar Guard** turned the firewall on, other devices can't reach the share until you allow it: `sudo ufw allow from 192.168.0.0/16 to any port <port>` (the port is in the link).
 
-![Ambar Share](images/os/share.jpg)
+=== "Light"
+
+    ![Ambar Share](images/os/share.jpg)
+
+=== "Dark"
+
+    ![Ambar Share in dark mode](images/os/share-dark.jpg)

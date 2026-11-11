@@ -13,7 +13,10 @@ font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 toolBarFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
-fixed=Noto Sans Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+XftAntialias=true
+XftHintStyle=hintslight
+XftSubPixel=none
+fixed=JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 
 [WM]
 activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
@@ -23,10 +26,62 @@ LookAndFeelPackage=os.ambar.desktop
 DefaultLightLookAndFeel=os.ambar.desktop
 DefaultDarkLookAndFeel=os.ambar.desktop.dark
 widgetStyle=Breeze
+AnimationDurationFactor=0.7
 
 [Icons]
 Theme=Papirus
 CFG
+# --- crisp text everywhere: grayscale antialiasing with slight hinting (what macOS
+# does), so text looks the same on any panel and in screenshots, with no colour fringes.
+install -d /etc/fonts
+cat > /etc/fonts/local.conf <<'CFG'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <match target="font">
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="hinting" mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+    <edit name="rgba" mode="assign"><const>none</const></edit>
+    <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+    <edit name="autohint" mode="assign"><bool>false</bool></edit>
+    <edit name="embeddedbitmap" mode="assign"><bool>false</bool></edit>
+  </match>
+  <alias binding="strong"><family>sans-serif</family><prefer><family>Inter</family><family>Noto Sans</family></prefer></alias>
+  <alias binding="strong"><family>system-ui</family><prefer><family>Inter</family></prefer></alias>
+  <alias binding="strong"><family>monospace</family><prefer><family>JetBrains Mono</family><family>Noto Sans Mono</family></prefer></alias>
+  <alias><family>Helvetica</family><prefer><family>Inter</family></prefer></alias>
+  <alias><family>Arial</family><prefer><family>Inter</family></prefer></alias>
+</fontconfig>
+CFG
+
+# --- GTK apps (Firefox, GIMP, LibreOffice dialogs…) match the Qt apps: same font,
+# icons, rendering and traffic-light buttons on the left. Plasma's GTK sync keeps
+# colours in step with light/dark at login.
+for v in 3.0 4.0; do
+  install -d "/etc/gtk-$v"
+  cat > "/etc/gtk-$v/settings.ini" <<'CFG'
+[Settings]
+gtk-theme-name=Breeze
+gtk-icon-theme-name=Papirus
+gtk-cursor-theme-name=breeze_cursors
+gtk-font-name=Inter 10
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintslight
+gtk-xft-rgba=none
+gtk-decoration-layout=close,minimize,maximize:
+gtk-enable-animations=true
+gtk-primary-button-warps-slider=true
+CFG
+done
+install -d /etc/gtk-2.0
+cat > /etc/gtk-2.0/gtkrc <<'CFG'
+gtk-theme-name="Breeze"
+gtk-icon-theme-name="Papirus"
+gtk-font-name="Inter 10"
+CFG
+
 cat > /etc/xdg/kwinrc <<'CFG'
 [org.kde.kdecoration2]
 library=org.kde.kwin.aurorae.v2

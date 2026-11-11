@@ -183,6 +183,8 @@ ambar() {
   cp "$sec"/menu/*.directory "$ROOT/usr/share/desktop-directories/"
 
   log "Ambar's own tools: Workbench, Guard, Clean, Share"
+  install -Dm644 "$REPO/desktop/share/python/ambar_ui.py" "$ROOT/usr/lib/ambar/python/ambar_ui.py"
+  install -Dm644 "$REPO/desktop/brand/ambar-mark.svg" "$ROOT/usr/share/ambar/ambar-mark.svg"
   local d app
   for d in workbench guard utils; do
     for app in "$REPO/desktop/$d"/ambar-*; do
@@ -202,6 +204,7 @@ ambar() {
   done
   in_root ambar --version
   in_root python3 -c "import ambar_center, ambar_sdk"
+  in_root python3 -c "import sys; sys.path.insert(0, '/usr/lib/ambar/python'); import ambar_ui"
   in_root ambar-sec list --tier top10 >/dev/null
   in_root ambar-recon scope localhost >/dev/null
   in_root ambar-guard check --json >/dev/null

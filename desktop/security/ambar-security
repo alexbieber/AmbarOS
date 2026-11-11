@@ -16,10 +16,9 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QGridLayout, QGroupBox, QHBoxLayout,
-                               QHeaderView, QLabel, QLineEdit, QMainWindow, QPushButton, QRadioButton,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QGridLayout, QHBoxLayout, QLineEdit,
+                               QMainWindow, QRadioButton, QTableWidgetItem, QVBoxLayout)
 
 
 def _cli():
@@ -30,13 +29,19 @@ def _cli():
     return mod, path
 
 
+sys.path[:0] = [str(p) for p in (Path(__file__).resolve().parents[1] / "share/python", Path("/usr/lib/ambar/python"))
+                if (p / "ambar_ui.py").exists()]
+import ambar_ui as ui  # noqa: E402
+
+ICON = Path(__file__).with_name("ambar-security.svg")
 SOURCES = {"apt": "Ubuntu", "pipx": "Python (isolated)", "github": "Release binary (verified)", "kali": "Kali container"}
+SOURCE_BADGE = {"apt": "good", "pipx": "info", "github": "accent", "kali": "neutral"}
 TIER_TEXT = {
-    "none": "No tier: only the categories or tools ticked below",
-    "top10": "Top 10: nmap, Wireshark, Metasploit, Burp Suite, Hydra, John, sqlmap, NetExec…",
-    "default": "Default: everything in Kali's standard ISO, with modern replacements (recommended)",
-    "large": "Large: Default plus Kali's large set",
-    "everything": "Everything: Default plus every Kali tool (a full Kali install is about 36 GB)",
+    "none": ("Custom", "Only the categories or tools you tick"),
+    "top10": ("Top 10", "nmap, Wireshark, Metasploit, Burp Suite, Hydra, John, sqlmap, NetExec…"),
+    "default": ("Default · recommended", "Everything in Kali's standard ISO, with modern replacements"),
+    "large": ("Large", "Default plus Kali's large set"),
+    "everything": ("Everything", "Every Kali tool. A full Kali install is about 36 GB"),
 }
 
 
@@ -47,63 +52,82 @@ class Window(QMainWindow):
         self.cat = self.sec.load(self.sec.CATALOG)
         self.runner = runner or self.run_in_terminal
         self.setWindowTitle("Ambar Security")
-        self.setWindowIcon(QIcon.fromTheme("ambar-security"))
-        self.resize(1000, 720)
-        root = QWidget()
-        v = QVBoxLayout(root)
-        head = QLabel("<h2>Security tools</h2>Kali's tool set, from modern sources: Ubuntu packages, isolated "
-                      "Python tools, checksum-verified binaries and a Kali container for the rest.<br>"
-                      f"<b>{self.sec.NOTICE}</b>")
-        if first_run:
-            head.setText(head.text() + "<p><b>Welcome to Ambar OS Security.</b> Kali's Ubuntu, Python and binary "
-                         "tools are already installed. Click <b>Install</b> to add the rest (Metasploit, Burp Suite, "
-                         "Responder, WPScan…) from an isolated Kali container. That downloads several GB.</p>")
-        head.setWordWrap(True)
-        v.addWidget(head)
+        self.setWindowIcon(ui.app_icon("ambar-security", ICON))
+        self.resize(1120, 780)
+        self.shell = ui.Shell("Security", "Kali's tools, modernised", "ambar-security", ICON)
 
-        tiers = QGroupBox("Tier")
-        tv = QVBoxLayout(tiers)
+        # Page 1: choose what to install
+        page = ui.Page("Install tools", "Kali's tool set from modern sources: Ubuntu packages, isolated Python tools, "
+                       "checksum-verified binaries, and a Kali container for the rest.")
+        if first_run:
+            page.body.addWidget(ui.label(
+                "<b>Welcome to Ambar OS Security.</b> Kali's Ubuntu, Python and binary tools are already installed. "
+                "Click <b>Install</b> to add the rest (Metasploit, Burp Suite, Responder, WPScan…) from an isolated "
+                "Kali container. That downloads several GB.", "notice", wrap=True))
+        page.body.addWidget(ui.label(self.sec.NOTICE, "notice", wrap=True))
+        cols = QHBoxLayout()
+        cols.setSpacing(16)
+        tiers = ui.Card("Tier", "A tier is a ready-made set, like Kali's metapackages.")
         self.tier = QButtonGroup(self)
-        for key, text in TIER_TEXT.items():
-            b = QRadioButton(text)
+        for key, (title, text) in TIER_TEXT.items():
+            b = QRadioButton(title)
             b.setProperty("tier", key)
             b.setChecked(key == "default")
+            b.setStyleSheet("font-weight: 600;")
             self.tier.addButton(b)
-            tv.addWidget(b)
-        v.addWidget(tiers)
-
-        cats = QGroupBox("Add categories")
-        grid = QGridLayout(cats)
+            group = QVBoxLayout()
+            group.setSpacing(0)
+            group.addWidget(b)
+            d = ui.label(text, "muted", wrap=True)
+            d.setContentsMargins(27, 0, 0, 2)
+            group.addWidget(d)
+            tiers.body.addLayout(group)
+        tiers.body.addStretch(1)
+        cols.addWidget(tiers, 2)
+        cats = ui.Card("Add categories", "Kali's menu categories, on top of the tier.")
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(12)
         self.cats: dict[str, QCheckBox] = {}
         for i, (key, title) in enumerate(c for c in self.cat["categories"].items() if c[0] != "support"):
             box = QCheckBox(title.replace("&", "&&"))  # "&" would mark a shortcut key
             self.cats[key] = box
-            grid.addWidget(box, i // 3, i % 3)
-        v.addWidget(cats)
+            grid.addWidget(box, i // 2, i % 2)
+        cats.body.addLayout(grid)
+        cats.body.addStretch(1)
+        cols.addWidget(cats, 3)
+        page.body.addLayout(cols)
+        page.body.addStretch(1)
+        self.shell.add_page("Install", page, "run-install")
 
-        self.filter = QLineEdit(placeholderText="Search tools…")
+        # Page 2: every tool
+        tools = ui.Page("All tools", "Tick single tools to add them. A check mark means it's installed.")
+        self.filter = QLineEdit(placeholderText="Search tools, categories and what they do…")
+        self.filter.setProperty("search", True)
+        self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(self.apply_filter)
-        v.addWidget(self.filter)
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["", "Tool", "Category", "Source", "What it does"])
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
-        self.table.verticalHeader().hide()
+        tools.body.addWidget(self.filter)
+        self.table = ui.table(["", "Tool", "Category", "Source", "What it does"], stretch=4)
         self.fill()
-        v.addWidget(self.table, 1)
+        tools.body.addWidget(self.table, 1)
+        self.shell.add_page("All tools", tools, "view-list-details")
 
-        buttons = QHBoxLayout()
-        self.install_btn = QPushButton(QIcon.fromTheme("run-install"), "Install")
+        # Sidebar footer: what will happen, and the actions
+        sumcard = ui.Card(padding=12)
+        sumcard.body.addWidget(ui.label("SELECTED", "section"))
+        self.summary = ui.label("", wrap=True)
+        sumcard.body.addWidget(self.summary)
+        self.install_btn = ui.button("Install", "primary", "run-install")
         self.install_btn.clicked.connect(self.install)
-        update = QPushButton(QIcon.fromTheme("system-software-update"), "Update installed tools")
+        sumcard.body.addWidget(self.install_btn)
+        self.shell.footer.addWidget(sumcard)
+        update = ui.button("Update installed tools", icon="system-software-update")
         update.clicked.connect(lambda: self.runner(["update"]))
-        shell = QPushButton(QIcon.fromTheme("utilities-terminal"), "Open Kali shell")
+        shell = ui.button("Open Kali shell", icon="utilities-terminal")
         shell.clicked.connect(lambda: self.runner(["shell"]))
-        self.summary = QLabel()
-        buttons.addWidget(self.summary, 1)
-        for b in (shell, update, self.install_btn):
-            buttons.addWidget(b)
-        v.addLayout(buttons)
-        self.setCentralWidget(root)
+        self.shell.footer.addWidget(update)
+        self.shell.footer.addWidget(shell)
+        self.setCentralWidget(self.shell)
         self.tier.buttonToggled.connect(lambda *_: self.refresh_summary())
         for box in self.cats.values():
             box.toggled.connect(lambda *_: self.refresh_summary())
@@ -122,12 +146,20 @@ class Window(QMainWindow):
             done = self.sec.installed(t, self.cat, cache) if os.environ.get("AMBAR_SECURITY_NO_PROBE") != "1" else False
             name = QTableWidgetItem(t["name"] + ("  ✓" if done else ""))
             about = t["about"] + (f"  (replaces {', '.join(t['replaces'])})" if t["replaces"] else "")
-            for c, item in enumerate([check, name, QTableWidgetItem(self.cat["categories"][t["cat"]]),
-                                      QTableWidgetItem(SOURCES[t["src"]]), QTableWidgetItem(about)]):
+            if done:
+                name.setForeground(QColor(ui.theme()["good"]))
+            bold = name.font()
+            bold.setWeight(QFont.DemiBold)
+            name.setFont(bold)
+            src = QTableWidgetItem(SOURCES[t["src"]])
+            src.setForeground(QColor(ui.theme().tone(SOURCE_BADGE[t["src"]])))
+            for c, item in enumerate([check, name, QTableWidgetItem(self.cat["categories"][t["cat"]]), src,
+                                      QTableWidgetItem(about)]):
                 if c:
                     item.setFlags(Qt.ItemIsEnabled)
                 self.table.setItem(r, c, item)
         self.table.resizeColumnsToContents()
+        self.table.setColumnWidth(0, 40)
 
     def apply_filter(self, text: str) -> None:
         for r in range(self.table.rowCount()):
@@ -146,12 +178,16 @@ class Window(QMainWindow):
         targets = self.targets()
         if not targets:
             self.summary.setText("Choose a tier, a category or tools.")
+            self.summary.setProperty("role", "muted")
+            ui.restyle(self.summary)
             self.install_btn.setEnabled(False)
             return
         tools, meta = self.sec.resolve(self.cat, targets)
         kali = sum(t["src"] == "kali" for t in tools)
-        self.summary.setText(f"{len(tools)} tools ({kali} from the Kali container)"
+        self.summary.setText(f"<b>{len(tools)} tools</b>, {kali} from the Kali container"
                              + (f" + {', '.join(meta)}" if meta else ""))
+        self.summary.setProperty("role", None)
+        ui.restyle(self.summary)
         self.install_btn.setEnabled(True)
 
     def install(self) -> None:
@@ -168,6 +204,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Ambar Security")
     app.setDesktopFileName("os.ambar.Security")
+    ui.apply(app)
     w = Window(first_run="--first-run" in sys.argv)
     w.show()
     return app.exec()
