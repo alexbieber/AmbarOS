@@ -6,6 +6,7 @@ members = [
     "crates/ambar-service",
     "crates/ambar-ai",
     "crates/ambar-cli",
+    "crates/ambar-recon",
 ]
 
 [workspace.package]

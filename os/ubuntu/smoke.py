@@ -29,7 +29,8 @@ pgrep -x plasmashell >/dev/null && echo PLASMA_OK
 pgrep -x kwin_wayland >/dev/null && echo KWIN_WAYLAND_OK
 for a in dolphin konsole kate okular gwenview elisa haruna kcalc ark spectacle systemsettings plasma-discover \
          libreoffice kmail korganizer calamares flatpak snap distrobox wine timeshift kdeconnect-app \
-         ambar ambard ambar-center ambar-control-center ambar-hwreport; do
+         ambar ambard ambar-center ambar-control-center ambar-hwreport \
+         ambar-recon ambar-engage ambar-workbench ambar-guard ambar-guard-app ambar-clean ambar-share; do
   command -v "$a" >/dev/null && echo "APP_OK $a" || echo "APP_MISSING $a"
 done
 browser=$(cat /etc/ambar-browser); command -v "$browser" >/dev/null && echo "BROWSER_OK $browser"

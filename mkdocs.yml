@@ -62,6 +62,7 @@ nav:
       - Install: install.md
       - First steps: first-steps.md
       - Security tools: security.md
+      - Ambar's own tools: ambar-tools.md
   - Use it:
       - Workflow format: workflow-format.md
       - Background service: service.md

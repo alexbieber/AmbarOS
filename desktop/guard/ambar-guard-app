@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Ambar Guard: this computer's security checks, one-click fixes and live network connections."""
+from __future__ import annotations
+
+import html
+import importlib.machinery
+import importlib.util
+import ipaddress
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QMainWindow,
+                               QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
+                               QWidget)
+
+CLI = shutil.which("ambar-guard") or str(Path(__file__).resolve().parent / "ambar-guard")
+
+
+def _guard():
+    loader = importlib.machinery.SourceFileLoader("ambar_guard", CLI)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("ambar_guard", loader))
+    sys.modules["ambar_guard"] = mod
+    loader.exec_module(mod)
+    return mod
+
+
+COLOURS = {"pass": "#2E8B57", "fail": "#C0392B", "skip": "#8A8F98"}
+SEV = {"high": "#C0392B", "medium": "#D9822B", "low": "#C9A227", "info": "#6B7A8F"}
+
+
+class GuardWindow(QMainWindow):
+    def __init__(self, runner=None):
+        super().__init__()
+        self.g = _guard()
+        self.runner = runner or self.run_in_terminal
+        self.setWindowTitle("Ambar Guard")
+        self.setWindowIcon(QIcon.fromTheme("ambar-guard", QIcon.fromTheme("security-high")))
+        self.resize(980, 720)
+        tabs = QTabWidget()
+
+        # Checks
+        page = QWidget()
+        v = QVBoxLayout(page)
+        head = QHBoxLayout()
+        self.score = QLabel()
+        f = QFont()
+        f.setPointSize(30)
+        f.setBold(True)
+        self.score.setFont(f)
+        self.score_text = QLabel()
+        self.score_text.setWordWrap(True)
+        head.addWidget(self.score)
+        head.addWidget(self.score_text, 1)
+        self.fix_all = QPushButton(QIcon.fromTheme("tools-wizard"), "Fix everything that can be fixed")
+        self.fix_all.clicked.connect(lambda: self.runner(["fix", "--all"]))
+        recheck = QPushButton(QIcon.fromTheme("view-refresh"), "Check again")
+        recheck.clicked.connect(self.refresh_checks)
+        head.addWidget(recheck)
+        head.addWidget(self.fix_all)
+        v.addLayout(head)
+        self.list = QWidget()
+        self.grid = QGridLayout(self.list)
+        self.grid.setColumnStretch(1, 1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.list)
+        scroll.setFrameShape(QFrame.NoFrame)
+        v.addWidget(scroll, 1)
+        tabs.addTab(page, "Checks")
+
+        # Network
+        net = QWidget()
+        nv = QVBoxLayout(net)
+        nv.addWidget(QLabel("<b>Listening for connections</b> — anything marked <i>network</i> can be reached by other computers."))
+        self.listening = self.table(["App", "Protocol", "Address", "Port", "Reachable from"])
+        nv.addWidget(self.listening, 1)
+        nv.addWidget(QLabel("<b>Talking to</b> — open connections from apps on this computer."))
+        self.talking = self.table(["App", "Protocol", "Remote address", "Port", "State"])
+        nv.addWidget(self.talking, 2)
+        tabs.addTab(net, "Network")
+        self.setCentralWidget(tabs)
+
+        self.refresh_checks()
+        self.refresh_net()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh_net)
+        self.timer.start(2000)
+
+    @staticmethod
+    def table(headers: list[str]) -> QTableWidget:
+        t = QTableWidget(0, len(headers))
+        t.setHorizontalHeaderLabels(headers)
+        t.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        t.verticalHeader().hide()
+        t.setEditTriggers(QTableWidget.NoEditTriggers)
+        return t
+
+    def refresh_checks(self) -> None:
+        self.checks = self.g.all_checks()
+        s = self.g.score(self.checks)
+        colour = "#2E8B57" if s >= 80 else "#D9822B" if s >= 50 else "#C0392B"
+        self.score.setText(f"<span style='color:{colour}'>{s}</span>")
+        failed = [c for c in self.checks if c.status == "fail"]
+        self.score_text.setText(f"<b>Security score out of 100.</b><br>{len(failed)} of {len(self.checks)} checks need attention."
+                                if failed else "<b>Security score out of 100.</b><br>Everything checked looks good.")
+        self.fix_all.setEnabled(any(c.fix for c in failed))
+        while self.grid.count():
+            w = self.grid.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        order = {"fail": 0, "skip": 2, "pass": 1}
+        for r, c in enumerate(sorted(self.checks, key=lambda c: (order[c.status], list(SEV).index(c.severity)))):
+            mark = QLabel({"pass": "✓", "fail": "✗", "skip": "–"}[c.status])
+            mark.setStyleSheet(f"color:{COLOURS[c.status]}; font-size:18px; font-weight:bold")
+            esc = html.escape
+            text = QLabel(f"<b>{esc(c.title)}</b> <span style='color:{SEV[c.severity]}'>{c.severity}</span><br>{esc(c.detail)}"
+                          + (f"<br><i>{esc(c.fix_text)}</i>" if c.status == "fail" and c.fix_text else ""))
+            text.setWordWrap(True)
+            self.grid.addWidget(mark, r, 0, Qt.AlignTop)
+            self.grid.addWidget(text, r, 1)
+            if c.status == "fail" and c.fix:
+                b = QPushButton("Fix")
+                b.setProperty("check", c.id)
+                b.clicked.connect(lambda _=False, i=c.id: self.runner(["fix", i]))
+                self.grid.addWidget(b, r, 2, Qt.AlignTop)
+        self.grid.setRowStretch(len(self.checks), 1)
+
+    def refresh_net(self) -> None:
+        conns = self.g.connections()
+        listen = [c for c in conns if c["state"] == "LISTEN"]
+        talk = [c for c in conns if c["state"] not in ("LISTEN", "TIME_WAIT")]
+        self.fill(self.listening, sorted(listen, key=lambda c: (c["process"], c["local_port"])), lambda c: [
+            c["process"] or "?", c["proto"], c["local_ip"], str(c["local_port"]),
+            "this computer only" if ipaddress.ip_address(c["local_ip"]).is_loopback else "network"])
+        self.fill(self.talking, sorted(talk, key=lambda c: (c["process"], c["remote_ip"])), lambda c: [
+            c["process"] or "?", c["proto"], c["remote_ip"], str(c["remote_port"]), c["state"].replace("_", " ").lower()])
+
+    @staticmethod
+    def fill(t: QTableWidget, rows: list[dict], cols) -> None:
+        t.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c, val in enumerate(cols(row)):
+                item = QTableWidgetItem(val)
+                if val == "network":
+                    item.setForeground(QColor("#C0392B"))
+                t.setItem(r, c, item)
+
+    def run_in_terminal(self, args: list[str]) -> None:
+        cmd = " ".join(shlex.quote(a) for a in [CLI, *args])
+        term = shutil.which("konsole")
+        argv = [term, "--hold", "-e", "sh", "-c", cmd] if term else ["x-terminal-emulator", "-e", "sh", "-c", cmd]
+        p = subprocess.Popen(argv)
+        QTimer.singleShot(1000, lambda: self.wait_and_refresh(p))
+
+    def wait_and_refresh(self, p: subprocess.Popen) -> None:
+        if p.poll() is None:
+            QTimer.singleShot(1000, lambda: self.wait_and_refresh(p))
+        else:
+            self.refresh_checks()
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ambar Guard")
+    app.setDesktopFileName("os.ambar.Guard")
+    w = GuardWindow()
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

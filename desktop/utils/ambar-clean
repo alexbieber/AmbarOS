@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""ambar-clean: see what's taking space and free it safely.
+
+    ambar-clean                        what can be cleaned, and how much space it frees
+    ambar-clean run [ITEM...] [--dry-run] [--yes]
+                                       clean the safe items (or the ones you name)
+
+Safe items only remove things that are rebuilt or re-downloaded when needed:
+caches, downloaded package files, old logs, packages nothing uses any more, and
+old Snap and Flatpak versions. Emptying the Trash is permanent, so it only
+happens when you name it (ambar-clean run trash) and confirm.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+HOME = Path(os.environ.get("HOME", "~")).expanduser()
+ROOT = Path(os.environ.get("AMBAR_CLEAN_ROOT", "/"))
+
+
+def p(path: str) -> Path:
+    return ROOT / path.lstrip("/")
+
+
+@dataclass
+class Item:
+    id: str
+    title: str
+    about: str
+    size: int = 0                       # bytes it would free (estimate)
+    count: int = 0                      # packages, versions… where size is unknown
+    paths: list[Path] = field(default_factory=list)   # deleted (contents) by Python
+    commands: list[list[str]] = field(default_factory=list)
+    root: bool = False                  # commands need administrator rights
+    safe: bool = True                   # part of the default clean
+    available: bool = True
+
+
+def du(path: Path) -> int:
+    total = 0
+    try:
+        if path.is_symlink() or path.is_file():
+            return path.lstat().st_size
+        for entry in os.scandir(path):
+            try:
+                if entry.is_symlink():
+                    total += entry.stat(follow_symlinks=False).st_size
+                elif entry.is_dir(follow_symlinks=False):
+                    total += du(Path(entry.path))
+                else:
+                    total += entry.stat(follow_symlinks=False).st_size
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return total
+
+
+def run(cmd: list[str]) -> tuple[int, str]:
+    if not shutil.which(cmd[0]):
+        return 127, ""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return r.returncode, r.stdout + r.stderr
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def human(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1000 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1000
+    return ""
+
+
+# Caches that are safe to delete: programs rebuild them.
+USER_CACHES = [".cache/thumbnails", ".cache/pip", ".cache/mesa_shader_cache", ".cache/go-build",
+               ".cache/yarn", ".npm/_cacache", ".cargo/registry/cache", ".cache/pnpm", ".cache/ms-playwright-go"]
+
+
+def items() -> list[Item]:
+    out = []
+    # A cache folder that is a symlink may point at real data elsewhere: never follow it.
+    caches = [HOME / c for c in USER_CACHES if (HOME / c).is_dir() and not (HOME / c).is_symlink()]
+    out.append(Item("caches", "App caches", "Thumbnails, shader, pip, npm, Go and Cargo caches. Rebuilt when needed.",
+                    size=sum(du(c) for c in caches), paths=caches))
+
+    trash = [HOME / ".local/share/Trash/files", HOME / ".local/share/Trash/info"]
+    out.append(Item("trash", "Trash", "Files you deleted. Emptying it is permanent.",
+                    size=du(trash[0]), paths=[t for t in trash if t.exists()], safe=False))
+
+    debs = list(p("/var/cache/apt/archives").glob("*.deb"))
+    out.append(Item("apt-cache", "Downloaded package files", "Installers apt keeps after installing updates.",
+                    size=sum(d.stat().st_size for d in debs), commands=[["apt-get", "clean"]], root=True,
+                    available=p("/var/cache/apt").exists()))
+
+    code, sim = run(["apt-get", "-s", "autoremove", "--purge"])
+    removable = re.findall(r"^Purg (\S+)", sim, re.M)
+    out.append(Item("unused-packages", "Packages nothing uses", "Libraries and old kernels left behind by updates.",
+                    count=len(removable), commands=[["apt-get", "-y", "autoremove", "--purge"]], root=True,
+                    available=code != 127))
+
+    code, usage = run(["journalctl", "--disk-usage"])
+    m = re.search(r"take up ([\d.]+)([KMGT]?)", usage)
+    size = int(float(m.group(1)) * {"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}[m.group(2)]) if m else 0
+    out.append(Item("old-logs", "System logs older than 2 weeks", "Keeps the last 14 days of logs.",
+                    size=size, commands=[["journalctl", "--vacuum-time=14d"]], root=True, available=code != 127))
+
+    code, fl = run(["flatpak", "uninstall", "--unused", "--assumeno"])
+    unused = len(re.findall(r"^\s*\d+\.\s", fl, re.M))
+    out.append(Item("flatpak-unused", "Unused Flatpak runtimes", "Runtimes no installed app needs any more.",
+                    count=unused, commands=[["flatpak", "uninstall", "--unused", "-y"]], available=code != 127))
+
+    code, snaps = run(["snap", "list", "--all"])
+    old = [(l.split()[0], l.split()[2]) for l in snaps.splitlines()[1:] if "disabled" in l]
+    out.append(Item("snap-old", "Old Snap versions", "Snap keeps the previous version of each app.",
+                    count=len(old), commands=[["snap", "remove", n, f"--revision={r}"] for n, r in old], root=True,
+                    available=code != 127))
+
+    crash = [c for c in p("/var/crash").glob("*.crash")] if p("/var/crash").exists() else []
+    out.append(Item("crash-reports", "Crash reports", "Reports from programs that crashed.",
+                    size=sum(c.stat().st_size for c in crash), paths=crash, root=True))
+    return [i for i in out if i.available]
+
+
+def worth(i: Item) -> bool:
+    return i.size > 0 or i.count > 0
+
+
+def cmd_scan(a) -> int:
+    found = items()
+    if a.json:
+        print(json.dumps([{**{k: v for k, v in i.__dict__.items() if k not in ("paths", "commands")},
+                           "paths": [str(x) for x in i.paths]} for i in found], indent=2))
+        return 0
+    total = sum(i.size for i in found if i.safe)
+    for i in found:
+        amount = human(i.size) if i.size else (f"{i.count} to remove" if i.count else "nothing")
+        tag = "" if i.safe else "  (only when you ask: ambar-clean run " + i.id + ")"
+        print(f"{'•' if worth(i) else ' '} {i.title:<34} {amount:>14}   {i.about}{tag}")
+    print(f"\nSafe clean frees about {human(total)}: ambar-clean run")
+    return 0
+
+
+def delete_contents(path: Path) -> None:
+    if path.is_file() or path.is_symlink():
+        path.unlink(missing_ok=True)
+        return
+    for child in path.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            child.unlink(missing_ok=True)
+
+
+def cmd_run(a) -> int:
+    found = {i.id: i for i in items()}
+    if a.items:
+        unknown = [x for x in a.items if x not in found]
+        if unknown:
+            print(f"ambar-clean: unknown item(s) {', '.join(unknown)}; one of {', '.join(found)}", file=sys.stderr)
+            return 2
+        chosen = [found[x] for x in a.items]
+    else:
+        chosen = [i for i in found.values() if i.safe]
+    chosen = [i for i in chosen if worth(i)]
+    if not chosen:
+        print("Nothing to clean.")
+        return 0
+    if any(not i.safe for i in chosen) and not a.yes and not a.dry_run:
+        if not sys.stdin.isatty():
+            print("Emptying the Trash is permanent: add --yes to confirm.", file=sys.stderr)
+            return 2
+        if input("Empty the Trash for good? [y/N] ").strip().lower() not in ("y", "yes"):
+            chosen = [i for i in chosen if i.safe]
+    forced = os.environ.get("AMBAR_CLEAN_ASSUME_ROOT")
+    is_root = forced == "1" if forced in ("0", "1") else os.geteuid() == 0
+    freed = 0
+    for i in chosen:
+        print(f"• {i.title}")
+        for path in i.paths:
+            print(f"  delete contents of {path}" if path.is_dir() else f"  delete {path}")
+            if not a.dry_run:
+                if i.root and not is_root:
+                    subprocess.run(["sudo", "rm", "-rf", "--one-file-system", str(path)])
+                else:
+                    delete_contents(path)
+        for cmd in i.commands:
+            full = cmd if (not i.root or is_root) else ["sudo", *cmd]
+            print("  $ " + " ".join(full))
+            if not a.dry_run:
+                subprocess.run(full)
+        freed += i.size
+    print(f"\n{'Would free' if a.dry_run else 'Freed'} about {human(freed)}" + (" (plus removed packages and versions)." if any(i.count for i in chosen) else "."))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-clean", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd")
+    s = sub.add_parser("scan", help="show what can be cleaned (the default)")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("run", help="clean")
+    s.add_argument("items", nargs="*")
+    s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--yes", "-y", action="store_true", help="confirm emptying the Trash")
+    a = ap.parse_args(argv)
+    if a.cmd is None:
+        a = ap.parse_args(["scan", *(argv or [])])
+    return {"scan": cmd_scan, "run": cmd_run}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

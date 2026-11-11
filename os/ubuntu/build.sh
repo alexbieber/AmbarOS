@@ -136,9 +136,11 @@ ambar() {
   trap mounts_down EXIT
   mounts_up
   log "Ambar software"
-  [ -x "$REPO/target/release/ambard" ] || (cd "$REPO" && cargo build --release --locked --bin ambar --bin ambard)
+  [ -x "$REPO/target/release/ambard" ] && [ -x "$REPO/target/release/ambar-recon" ] \
+    || (cd "$REPO" && cargo build --release --locked --bin ambar --bin ambard --bin ambar-recon)
   install -Dm755 "$REPO/target/release/ambar" "$ROOT/usr/bin/ambar"
   install -Dm755 "$REPO/target/release/ambard" "$ROOT/usr/bin/ambard"
+  install -Dm755 "$REPO/target/release/ambar-recon" "$ROOT/usr/bin/ambar-recon"
   rm -rf "$ROOT/tmp/ambar-src"; mkdir -p "$ROOT/tmp/ambar-src"
   cp -r "$REPO/sdk/python" "$ROOT/tmp/ambar-src/sdk"
   cp -r "$REPO/desktop/automation-center" "$ROOT/tmp/ambar-src/center"
@@ -180,6 +182,16 @@ ambar() {
   install -d "$ROOT/usr/share/desktop-directories"
   cp "$sec"/menu/*.directory "$ROOT/usr/share/desktop-directories/"
 
+  log "Ambar's own tools: Workbench, Guard, Clean, Share"
+  local d app
+  for d in workbench guard utils; do
+    for app in "$REPO/desktop/$d"/ambar-*; do
+      [ -f "$app" ] && [ -x "$app" ] && [ "${app##*.}" != svg ] && install -Dm755 "$app" "$ROOT/usr/bin/$(basename "$app")"
+    done
+    for app in "$REPO/desktop/$d"/os.ambar.*.desktop; do install -Dm644 "$app" "$ROOT/usr/share/applications/$(basename "$app")"; done
+    for app in "$REPO/desktop/$d"/*.svg; do install -Dm644 "$app" "$ROOT/usr/share/icons/hicolor/scalable/apps/$(basename "$app")"; done
+  done
+
   log "Ambar desktop, branding and defaults (overlay + hooks)"
   cp -a "$HERE/overlay/." "$ROOT/"
   for h in "$HERE"/hooks/*.chroot; do
@@ -191,6 +203,8 @@ ambar() {
   in_root ambar --version
   in_root python3 -c "import ambar_center, ambar_sdk"
   in_root ambar-sec list --tier top10 >/dev/null
+  in_root ambar-recon scope localhost >/dev/null
+  in_root ambar-guard check --json >/dev/null
   if [ "$FLAVOR" = security ]; then
     log "Security edition: Kali's default tool set (Ubuntu, pipx, verified binaries)"
     in_root ambar-sec install default --system-only

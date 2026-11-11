@@ -1,0 +1,16 @@
+---
+description: Ambar's own tools - ambar-recon (Rust scanner, shared scope checker), Workbench, Guard, Clean, Share.
+globs: crates/ambar-recon/**, desktop/workbench/**, desktop/guard/**, desktop/utils/**, docs/ambar-tools.md
+alwaysApply: false
+---
+
+# Ambar's own tools
+
+- **Scope is the core rule.** `crates/ambar-recon/src/scope.rs` is the only scope implementation; Workbench calls `ambar-recon scope`. Every command that sends packets checks each target (and resolved addresses) first and fails closed. Without a scope file only loopback is allowed. Keep the engagement dates and the activity log.
+- These tools find, check, organise and report. Don't add exploitation, payloads, credential attacks or anything that changes a remote system; the Kali tools installed by `ambar-sec` cover that under the user's own control.
+- `ambar-recon`: Rust, tokio, rustls (aws-lc-rs provider, same as reqwest). JSON lines with `--json`. Integration tests in `tests/recon.rs` run the real binary against local servers; keep it that way.
+- `ambar-engage`: findings importers exist for ambar-recon, nmap XML and nuclei JSONL; add importers with a test fixture. Severities: critical, high, medium, low, info.
+- `ambar-guard`: checks only read; each fix is a list of commands plus a sentence describing it. Read the system under `AMBAR_GUARD_ROOT` so tests can use a fake root; connections come from `/proc/net/*` and `/proc/*/fd`.
+- `ambar-clean`: only known, rebuildable locations; never follow symlinks; the Trash needs explicit confirmation.
+- `ambar-share`: 128-bit random link, only the named files, expiry, constant-time token compare.
+- Apps are thin PySide6 windows over the CLI; app tests run offscreen in their own process.

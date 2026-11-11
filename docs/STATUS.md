@@ -38,6 +38,24 @@ _Last updated: 2026-11-11_
 - Two PyPI packages didn't work on Python 3.14 (ropper) or install no command (pdfid). Both now come from the Kali container.
 - ⚠ **Not run here:** release binaries (this workspace can't download GitHub release files; the checksum logic is tested against a local stand-in, including tampered and unsigned releases), the Kali container (no container registry access), and the Security ISO itself. The GitHub workflow builds and boot-tests both ISOs.
 
+**Ambar's own tools** (Recon, Workbench, Guard, Clean, Share):
+
+- **ambar-recon** (Rust): 13 unit tests and 7 integration tests run the real binary against real local servers:
+  - port scanning with banners and service names, including a web server on an unusual port
+  - HTTP fingerprinting against a mock site
+  - TLS against a real CA + certificate chain: trusted, untrusted, wrong name, expiry warning
+  - subdomains from a mock certificate-transparency log
+  - scope rules: excluded hosts, dates, wildcards, resolved addresses
+- **Workbench:** full flow with the real scanner: new engagement → scans → automatic findings → refusals of out-of-scope and excluded targets → Markdown/HTML/PDF report; the app driven offscreen.
+- **Guard:** all 11 checks against a fake system (an insecure one fails exactly the expected checks; a hardened one scores 100), fixes run the described commands, `/proc` connection parsing for IPv4 and IPv6. Also run on this real workspace, where it found 17 waiting security updates and a passwordless sudo rule.
+- **Clean and Share:** real files and real HTTP. Symlinked caches are never followed, the Trash needs confirmation, wrong share links get 404, and shares expire.
+- Bugs found by these tests and fixed:
+  - TOML dates without quotes weren't accepted
+  - the same file dropped twice was shared twice
+  - text like `<service>` vanished in the Guard window
+  - nmap host addresses were lost
+- ⚠ Not yet seen in a booted ISO; the build recipe installs them and the boot test checks they're there.
+
 **Found by booting it, and fixed in the recipe:**
 
 - **Black screen in the VM:** QEMU's emulated `-cpu max` crashed Mesa's software renderer. The test now emulates a plain x86-64-v2 CPU.
@@ -66,6 +84,7 @@ _Last updated: 2026-11-11_
 | Apps and install-anything (Store, `.deb`, Flatpak, Snap, AppImage, Wine) | ✅ installed and launch · ⚠ Flathub needs internet on first boot |
 | Installer (Calamares, Ambar branding) | ✅ full install in QEMU (Erase disk, 43/43 steps) · ✅ installed system boots to login and logs in · ⚠ installed desktop not drawn under emulation, under investigation |
 | Security tools (Kali's default set, `ambar-sec`, Ambar Security app) | ✅ Ubuntu and Python parts installed for real on 26.04 · ✅ checksum and service rules tested · ⚠ release binaries, Kali container and the Security ISO run only in CI so far |
+| Ambar's own tools (Recon, Workbench, Guard, Clean, Share) | ✅ tested against real servers, files and a fake system · ⚠ not yet booted in the ISO |
 | Atomic edition (Fedora Kinoite, bootc, ARM64, Raspberry Pi) | ⚠ experimental: recipe written, built only in CI |
 | Docs site, community files | ✅ strict build; documented commands checked against the real CLI |
 

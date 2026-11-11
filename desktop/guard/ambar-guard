@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+"""ambar-guard: check this computer's security settings, fix the safe ones, watch connections.
+
+    ambar-guard check [--json]          every check, with a score out of 100
+    ambar-guard fix ID... | --all       apply fixes (asks for your password when needed)
+    ambar-guard net [--listening] [--json]   which apps talk to the network, read from /proc
+
+Checks only read settings. Fixes change only what the check describes, and each
+one says what it will do before it runs.
+"""
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import os
+import re
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+# Everything is read relative to ROOT, so tests can use a fake system.
+ROOT = Path(os.environ.get("AMBAR_GUARD_ROOT", "/"))
+HOME = Path(os.environ.get("HOME", "~")).expanduser()
+WEIGHT = {"high": 25, "medium": 12, "low": 5, "info": 0}
+
+
+@dataclass
+class Check:
+    id: str
+    title: str
+    severity: str            # what a failure costs: high, medium, low, info
+    status: str = "pass"     # pass, fail, skip
+    detail: str = ""
+    fix: list[list[str]] = field(default_factory=list)   # commands; "sudo" is added where needed
+    fix_text: str = ""       # what the fix does, in words
+
+
+def p(path: str) -> Path:
+    return ROOT / path.lstrip("/")
+
+
+def read(path: str) -> str:
+    try:
+        return p(path).read_text(errors="replace")
+    except OSError:
+        return ""
+
+
+def run(cmd: list[str]) -> tuple[int, str]:
+    if not shutil.which(cmd[0]):
+        return 127, ""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return r.returncode, r.stdout + r.stderr
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def conf_value(text: str, key: str, sep: str = r"\s+") -> str | None:
+    """Last uncommented `key value` (or key=value) in a config text, lower-cased."""
+    val = None
+    for line in text.splitlines():
+        m = re.match(rf"^\s*{re.escape(key)}{sep}(\S+)", line, re.I)
+        if m:
+            val = m.group(1).strip().strip('"').lower()
+    return val
+
+
+# ----------------------------------------------------------------- checks
+
+def check_firewall() -> Check:
+    c = Check("firewall", "Firewall is on", "medium",
+              fix=[["ufw", "default", "deny", "incoming"], ["ufw", "default", "allow", "outgoing"], ["ufw", "--force", "enable"]],
+              fix_text="Turn on the firewall: block incoming connections, allow outgoing ones.")
+    conf = read("/etc/ufw/ufw.conf")
+    if not conf:
+        c.status, c.detail, c.fix = "skip", "ufw isn't installed", []
+        return c
+    if conf_value(conf, "ENABLED", r"\s*=\s*") != "yes":
+        c.status, c.detail = "fail", "The firewall (ufw) is off: every listening service can be reached from the network."
+    else:
+        c.detail, c.fix = "ufw is enabled.", []
+    return c
+
+
+def check_exposed_services(conns: list[dict]) -> Check:
+    c = Check("exposed-services", "No unexpected services listen on the network", "medium",
+              fix_text="Review the list; stop what you don't need with: sudo systemctl disable --now <service>")
+    public = [x for x in conns if x["state"] == "LISTEN" and not ipaddress.ip_address(x["local_ip"]).is_loopback]
+    # KDE Connect and mDNS are expected on a desktop
+    expected = {"kdeconnectd", "avahi-daemon", "systemd-resolve", "cupsd"}
+    odd = [x for x in public if x["process"] not in expected]
+    if odd:
+        c.status = "fail"
+        c.detail = "Listening on the network: " + ", ".join(sorted({f"{x['process'] or '?'} ({x['proto']} {x['local_port']})" for x in odd}))
+    else:
+        c.detail = "Only expected desktop services listen." if public else "Nothing listens on the network."
+    return c
+
+
+def check_ssh() -> Check:
+    c = Check("ssh", "SSH server doesn't allow root or password logins", "high",
+              fix=[["install", "-m", "644", "/dev/stdin", "/etc/ssh/sshd_config.d/50-ambar-guard.conf"], ["systemctl", "reload", "ssh"]],
+              fix_text="Turn off root login and password login for SSH (keys only).")
+    if not p("/usr/sbin/sshd").exists():
+        c.status, c.detail, c.fix = "skip", "No SSH server installed.", []
+        return c
+    texts = [read("/etc/ssh/sshd_config")] + [f.read_text(errors="replace") for f in sorted(p("/etc/ssh/sshd_config.d").glob("*.conf"))]
+    # sshd uses the FIRST value it sees for a keyword; drop-ins are included at the top.
+    def first(key: str) -> str | None:
+        order = texts[1:] + texts[:1]
+        for t in order:
+            for line in t.splitlines():
+                m = re.match(rf"^\s*{key}\s+(\S+)", line, re.I)
+                if m:
+                    return m.group(1).lower()
+        return None
+    root = first("PermitRootLogin") or "prohibit-password"
+    pw = first("PasswordAuthentication") or "yes"
+    bad = []
+    if root == "yes":
+        bad.append("root can log in with a password")
+    if pw == "yes":
+        bad.append("password logins are allowed")
+    if bad:
+        c.status, c.detail = "fail", "; ".join(bad).capitalize() + "."
+    else:
+        c.detail, c.fix = "Keys only, no root password login.", []
+    return c
+
+
+def check_auto_updates() -> Check:
+    c = Check("auto-updates", "Security updates install automatically", "medium",
+              fix=[["install", "-m", "644", "/dev/stdin", "/etc/apt/apt.conf.d/20auto-upgrades"]],
+              fix_text="Turn on daily automatic security updates (unattended-upgrades).")
+    text = read("/etc/apt/apt.conf.d/20auto-upgrades")
+    ok = re.search(r'Unattended-Upgrade\s+"1"', text) and re.search(r'Update-Package-Lists\s+"1"', text)
+    if not p("/usr/bin/unattended-upgrade").exists():
+        c.status, c.detail = "fail", "unattended-upgrades isn't installed."
+        c.fix = [["apt-get", "install", "-y", "unattended-upgrades"], *c.fix]
+    elif not ok:
+        c.status, c.detail = "fail", "Automatic security updates are turned off."
+    else:
+        c.detail, c.fix = "Daily automatic security updates are on.", []
+    return c
+
+
+def check_pending_updates() -> Check:
+    c = Check("pending-updates", "No security updates are waiting", "high",
+              fix=[["apt-get", "update"], ["apt-get", "-y", "upgrade"]], fix_text="Install all waiting updates now.")
+    code, out = run(["apt", "list", "--upgradable"])
+    if code == 127:
+        c.status, c.detail, c.fix = "skip", "apt isn't available.", []
+        return c
+    sec = [l.split("/")[0] for l in out.splitlines() if "-security" in l]
+    other = [l for l in out.splitlines() if "/" in l and "-security" not in l]
+    if sec:
+        c.status, c.detail = "fail", f"{len(sec)} security updates waiting: " + ", ".join(sec[:8]) + ("…" if len(sec) > 8 else "")
+    else:
+        c.detail, c.fix = f"No security updates waiting ({len(other)} other updates).", []
+        if other:
+            c.fix = [["apt-get", "update"], ["apt-get", "-y", "upgrade"]]
+            c.fix_text = f"Install the {len(other)} other waiting updates."
+    return c
+
+
+def check_disk_encryption() -> Check:
+    c = Check("disk-encryption", "The system disk is encrypted", "medium",
+              fix_text="Disk encryption can only be chosen when installing: reinstall with 'Encrypt system' ticked, after a backup.")
+    code, out = run(["lsblk", "-J", "-o", "NAME,TYPE,MOUNTPOINTS"])
+    if code != 0:
+        c.status, c.detail = "skip", "Can't read the disk layout."
+        return c
+    try:
+        tree = json.loads(out)["blockdevices"]
+    except (ValueError, KeyError):
+        c.status, c.detail = "skip", "Can't read the disk layout."
+        return c
+
+    def walk(nodes, crypt=False):
+        for n in nodes:
+            inside = crypt or n.get("type") == "crypt"
+            if "/" in (n.get("mountpoints") or []):
+                return inside
+            r = walk(n.get("children", []), inside)
+            if r is not None:
+                return r
+        return None
+
+    enc = walk(tree)
+    if enc is None:
+        c.status, c.detail = "skip", "The root file system isn't on a local disk (live session or container)."
+    elif not enc:
+        c.status, c.detail = "fail", "The system disk isn't encrypted: anyone with the laptop can read it."
+    else:
+        c.detail = "The root file system is on an encrypted volume."
+    return c
+
+
+def check_screen_lock() -> Check:
+    c = Check("screen-lock", "The screen locks automatically", "low",
+              fix=[["kwriteconfig6", "--file", "kscreenlockerrc", "--group", "Daemon", "--key", "Autolock", "true"],
+                   ["kwriteconfig6", "--file", "kscreenlockerrc", "--group", "Daemon", "--key", "LockOnResume", "true"]],
+              fix_text="Lock the screen after inactivity and when waking from sleep.")
+    text = read(str(HOME / ".config/kscreenlockerrc")) if ROOT == Path("/") else read("/home/user/.config/kscreenlockerrc")
+    off = [k for k in ("Autolock", "LockOnResume") if conf_value(text, k, r"\s*=\s*") == "false"]
+    if off:
+        c.status, c.detail = "fail", f"Turned off: {', '.join(off)}."
+    else:
+        c.detail, c.fix = "Locks after inactivity and on wake.", []
+    return c
+
+
+def check_path_writable() -> Check:
+    c = Check("path-writable", "No program folder can be changed by everyone", "high",
+              fix_text="Remove write access for others: sudo chmod o-w <folder>")
+    bad = []
+    for d in os.environ.get("PATH", "/usr/bin:/bin").split(":"):
+        try:
+            st = p(d).stat()
+        except OSError:
+            continue
+        if st.st_mode & stat.S_IWOTH and not st.st_mode & stat.S_ISVTX:
+            bad.append(d)
+    if bad:
+        c.status, c.detail = "fail", "Anyone can add programs to: " + ", ".join(bad)
+        c.fix = [["chmod", "o-w", d] for d in bad]
+    else:
+        c.detail = "Program folders are protected."
+    return c
+
+
+def check_sudo_nopasswd() -> Check:
+    c = Check("sudo-nopasswd", "Administrator commands always ask for a password", "medium",
+              fix_text="Remove NOPASSWD from the listed sudoers file (use: sudo visudo -f <file>).")
+    files = [p("/etc/sudoers"), *sorted(p("/etc/sudoers.d").glob("*"))]
+    readable = [f for f in files if f.is_file() and os.access(f, os.R_OK)]
+    if not readable:
+        c.status, c.detail = "skip", "sudoers isn't readable without administrator rights (run with sudo to check)."
+        return c
+    hits = []
+    for f in readable:
+        for line in f.read_text(errors="replace").splitlines():
+            if "NOPASSWD" in line and not line.lstrip().startswith("#"):
+                hits.append(f"{f.name}: {line.strip()}")
+    # The live USB session needs it; an installed system shouldn't.
+    hits = [h for h in hits if not h.startswith("ambar-live:")]
+    if hits:
+        c.status, c.detail = "fail", "; ".join(hits[:3])
+    else:
+        c.detail = "No passwordless sudo rules."
+    return c
+
+
+def check_kernel() -> Check:
+    c = Check("kernel-hardening", "Kernel hardening settings are on", "low",
+              fix=[["install", "-m", "644", "/dev/stdin", "/etc/sysctl.d/60-ambar-guard.conf"], ["sysctl", "--system"]],
+              fix_text="Hide kernel addresses and logs from normal users, restrict ptrace.")
+    want = {"kernel/kptr_restrict": ("1", "2"), "kernel/dmesg_restrict": ("1",), "kernel/yama/ptrace_scope": ("1", "2", "3")}
+    off = []
+    for key, good in want.items():
+        v = read(f"/proc/sys/{key}").strip()
+        if v and v not in good:
+            off.append(f"{key.replace('/', '.')}={v}")
+    if off:
+        c.status, c.detail = "fail", "Not hardened: " + ", ".join(off)
+    else:
+        c.detail, c.fix = "kptr_restrict, dmesg_restrict and ptrace_scope are set.", []
+    return c
+
+
+def check_secure_boot() -> Check:
+    c = Check("secure-boot", "Secure Boot is on", "info")
+    code, out = run(["mokutil", "--sb-state"])
+    if code == 127 or not out:
+        c.status, c.detail = "skip", "Can't tell (mokutil missing, or a BIOS system)."
+    elif "enabled" in out.lower():
+        c.detail = "Secure Boot is enabled."
+    else:
+        c.status, c.detail = "fail", "Secure Boot is off. Turn it on in the firmware settings if your hardware supports it."
+    return c
+
+
+FILE_FIXES = {
+    "ssh": "PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n",
+    "auto-updates": 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n',
+    "kernel-hardening": "kernel.kptr_restrict = 1\nkernel.dmesg_restrict = 1\nkernel.yama.ptrace_scope = 1\n",
+}
+USER_FIXES = {"screen-lock"}  # run as you, not as root
+
+
+def all_checks() -> list[Check]:
+    conns = connections()
+    return [check_firewall(), check_exposed_services(conns), check_ssh(), check_pending_updates(), check_auto_updates(),
+            check_disk_encryption(), check_screen_lock(), check_path_writable(), check_sudo_nopasswd(),
+            check_kernel(), check_secure_boot()]
+
+
+def score(checks: list[Check]) -> int:
+    lost = sum(WEIGHT[c.severity] for c in checks if c.status == "fail")
+    return max(0, 100 - lost)
+
+
+# ----------------------------------------------------------------- connections
+
+TCP_STATES = {"01": "ESTABLISHED", "02": "SYN_SENT", "06": "TIME_WAIT", "0A": "LISTEN", "08": "CLOSE_WAIT"}
+
+
+def _addr(hexaddr: str) -> tuple[str, int]:
+    ip_hex, port_hex = hexaddr.split(":")
+    raw = bytes.fromhex(ip_hex)
+    if len(raw) == 4:
+        ip = socket.inet_ntop(socket.AF_INET, raw[::-1])
+    else:  # IPv6: four little-endian 32-bit words
+        ip = socket.inet_ntop(socket.AF_INET6, b"".join(raw[i:i + 4][::-1] for i in range(0, 16, 4)))
+    return ip, int(port_hex, 16)
+
+
+def socket_owners() -> dict[str, tuple[int, str]]:
+    """socket inode → (pid, process name). Other users' processes need root to see."""
+    owners = {}
+    for proc in p("/proc").glob("[0-9]*"):
+        try:
+            name = (proc / "comm").read_text().strip()
+            for fd in (proc / "fd").iterdir():
+                target = os.readlink(fd)
+                if target.startswith("socket:["):
+                    owners[target[8:-1]] = (int(proc.name), name)
+        except OSError:
+            continue
+    return owners
+
+
+def connections() -> list[dict]:
+    owners = socket_owners()
+    out = []
+    for proto in ("tcp", "tcp6", "udp", "udp6"):
+        lines = read(f"/proc/net/{proto}").splitlines()[1:]
+        for line in lines:
+            f = line.split()
+            if len(f) < 10:
+                continue
+            lip, lport = _addr(f[1])
+            rip, rport = _addr(f[2])
+            st = TCP_STATES.get(f[3], f[3]) if proto.startswith("tcp") else ("LISTEN" if rport == 0 else "ESTABLISHED")
+            pid, name = owners.get(f[9], (0, ""))
+            out.append({"proto": proto.rstrip("6"), "local_ip": lip, "local_port": lport, "remote_ip": rip,
+                        "remote_port": rport, "state": st, "pid": pid, "process": name})
+    return out
+
+
+# ----------------------------------------------------------------- commands
+
+ICON = {"pass": "✓", "fail": "✗", "skip": "–"}
+
+
+def cmd_check(a) -> int:
+    checks = all_checks()
+    if a.json:
+        print(json.dumps({"score": score(checks), "checks": [asdict(c) for c in checks]}, indent=2))
+        return 0
+    print(f"Security score: {score(checks)}/100\n")
+    for c in checks:
+        print(f" {ICON[c.status]} {c.title}  [{c.severity}]\n     {c.detail}")
+        if c.status == "fail" and (c.fix or c.fix_text):
+            print(f"     → {c.fix_text}" + (f"  (ambar-guard fix {c.id})" if c.fix else ""))
+    return 0
+
+
+def apply(c: Check, dry: bool) -> bool:
+    print(f"• {c.title}: {c.fix_text}")
+    forced = os.environ.get("AMBAR_GUARD_ASSUME_ROOT")  # "1"/"0" in tests
+    root = forced == "1" if forced in ("0", "1") else os.geteuid() == 0
+    for cmd in c.fix:
+        full = cmd if (root or c.id in USER_FIXES) else ["sudo", *cmd]
+        print("  $ " + " ".join(full))
+        if dry:
+            continue
+        stdin = FILE_FIXES.get(c.id) if "/dev/stdin" in cmd else None
+        r = subprocess.run(full, input=stdin, text=True)
+        if r.returncode != 0:
+            print(f"  ! failed ({r.returncode})")
+            return False
+    return True
+
+
+def cmd_fix(a) -> int:
+    checks = {c.id: c for c in all_checks()}
+    wanted = [c for c in checks.values() if c.status == "fail" and c.fix] if a.all else []
+    for i in a.ids:
+        if i not in checks:
+            print(f"ambar-guard: no check called {i}; one of {', '.join(checks)}", file=sys.stderr)
+            return 2
+        if checks[i].status != "fail":
+            print(f"{i}: nothing to fix ({checks[i].detail})")
+        elif not checks[i].fix:
+            print(f"{i}: can't be fixed automatically. {checks[i].fix_text}")
+        else:
+            wanted.append(checks[i])
+    ok = all([apply(c, a.dry_run) for c in wanted])
+    if wanted and not a.dry_run:
+        after = {c.id: c for c in all_checks()}
+        still = [c.id for c in wanted if after[c.id].status == "fail"]
+        print(f"\nScore now {score(list(after.values()))}/100." + (f" Still failing: {', '.join(still)}" if still else ""))
+    return 0 if ok else 1
+
+
+def cmd_net(a) -> int:
+    rows = [c for c in connections() if (c["state"] == "LISTEN") == a.listening and not (c["state"] == "TIME_WAIT")]
+    if a.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    rows.sort(key=lambda r: (r["process"], r["remote_ip"], r["remote_port"]))
+    if a.listening:
+        for r in rows:
+            scope = "this computer only" if ipaddress.ip_address(r["local_ip"]).is_loopback else "NETWORK"
+            print(f"{r['process'] or '?':<20} {r['proto']} {r['local_ip']}:{r['local_port']:<6} {scope}")
+    else:
+        for r in rows:
+            print(f"{r['process'] or '?':<20} {r['proto']} → {r['remote_ip']}:{r['remote_port']:<6} {r['state']}")
+    if not rows:
+        print("No connections." if not a.listening else "Nothing is listening.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-guard", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("check", help="check this computer")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("fix", help="fix failed checks")
+    s.add_argument("ids", nargs="*")
+    s.add_argument("--all", action="store_true", help="every failed check that can be fixed")
+    s.add_argument("--dry-run", action="store_true")
+    s = sub.add_parser("net", help="network connections per app")
+    s.add_argument("--listening", action="store_true", help="what listens for connections")
+    s.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    return {"check": cmd_check, "fix": cmd_fix, "net": cmd_net}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

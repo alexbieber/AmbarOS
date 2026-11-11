@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ambar Clean
+GenericName=Disk Cleaner
+Comment=See what takes space and free it safely
+Exec=ambar-clean-app
+Icon=ambar-clean
+Terminal=false
+Categories=Utility;
+Keywords=disk;space;clean;cache;trash;storage;

@@ -62,6 +62,9 @@ gstreamer1.0-libav
 # --- system tools
 timeshift
 ufw
+unattended-upgrades
+qrencode
+iproute2
 plasma-firewall
 fwupd
 ubuntu-drivers-common

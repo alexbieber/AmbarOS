@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Ambar Share: drop files, scan the QR code on your phone, download. Nothing leaves your network."""
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import shutil
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QGuiApplication, QIcon, QPixmap
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QListWidget,
+                               QMainWindow, QPushButton, QVBoxLayout, QWidget)
+
+CLI = shutil.which("ambar-share") or str(Path(__file__).resolve().parent / "ambar-share")
+
+
+def _share():
+    loader = importlib.machinery.SourceFileLoader("ambar_share", CLI)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("ambar_share", loader))
+    sys.modules["ambar_share"] = mod
+    loader.exec_module(mod)
+    return mod
+
+
+class ShareWindow(QMainWindow):
+    def __init__(self, host: str | None = None):
+        super().__init__()
+        self.m = _share()
+        self.host = host
+        self.server = None
+        self.setWindowTitle("Ambar Share")
+        self.setWindowIcon(QIcon.fromTheme("ambar-share", QIcon.fromTheme("document-send")))
+        self.setAcceptDrops(True)
+        self.resize(640, 640)
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.addWidget(QLabel("<h2>Share files on this network</h2>Drop files here, then open the link (or scan the code) "
+                           "on a phone or computer on the same Wi-Fi."))
+        self.list = QListWidget()
+        v.addWidget(self.list, 1)
+        row = QHBoxLayout()
+        add = QPushButton(QIcon.fromTheme("list-add"), "Add files…")
+        add.clicked.connect(self.pick)
+        self.minutes = QComboBox()
+        for m in (10, 30, 60, 240):
+            self.minutes.addItem(f"for {m} minutes", m)
+        self.minutes.setCurrentIndex(1)
+        self.once = QCheckBox("stop after one download")
+        self.start = QPushButton(QIcon.fromTheme("document-send"), "Share")
+        self.start.clicked.connect(self.toggle)
+        for w in (add, self.minutes, self.once):
+            row.addWidget(w)
+        row.addStretch(1)
+        row.addWidget(self.start)
+        v.addLayout(row)
+        self.qr = QLabel(alignment=Qt.AlignCenter)
+        v.addWidget(self.qr)
+        self.url = QLabel(alignment=Qt.AlignCenter)
+        self.url.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        mono = QFont("monospace")
+        self.url.setFont(mono)
+        v.addWidget(self.url)
+        self.status = QLabel(alignment=Qt.AlignCenter)
+        v.addWidget(self.status)
+        self.setCentralWidget(root)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        self.add_files([Path(u.toLocalFile()) for u in e.mimeData().urls()])
+
+    def pick(self):
+        files, _ = QFileDialog.getOpenFileNames(self, "Choose files to share")
+        self.add_files([Path(f) for f in files])
+
+    def add_files(self, files: list[Path]) -> None:
+        have = {self.list.item(i).data(Qt.UserRole) for i in range(self.list.count())}
+        for f in files:
+            if f.is_file() and str(f) not in have:
+                have.add(str(f))
+                self.list.addItem(f.name)
+                self.list.item(self.list.count() - 1).setData(Qt.UserRole, str(f))
+
+    def toggle(self) -> None:
+        if self.server:
+            self.stop()
+            return
+        files = [Path(self.list.item(i).data(Qt.UserRole)) for i in range(self.list.count())]
+        if not files:
+            self.status.setText("Add a file first.")
+            return
+        if len({f.name for f in files}) != len(files):
+            self.status.setText("Two files have the same name.")
+            return
+        self.share = self.m.Share(files, self.minutes.currentData(), self.once.isChecked())
+        self.server, url = self.m.serve(self.share, self.host or self.m.lan_ip(), 0)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url.setText(url)
+        QGuiApplication.clipboard().setText(url)
+        self.show_qr(url)
+        self.start.setText("Stop sharing")
+        self.status.setText("Link copied. Sharing…")
+        self.timer.start(500)
+
+    def show_qr(self, url: str) -> None:
+        if not shutil.which("qrencode"):
+            self.qr.setText("(install qrencode for a QR code)")
+            return
+        png = subprocess.run(["qrencode", "-o", "-", "-s", "8", "-m", "2", url], capture_output=True).stdout
+        pix = QPixmap()
+        pix.loadFromData(png)
+        self.qr.setPixmap(pix)
+
+    def tick(self) -> None:
+        if not self.share.expired():
+            self.status.setText(f"Sharing… {self.share.downloads} download{'s' if self.share.downloads != 1 else ''}")
+        else:
+            self.stop()
+
+    def stop(self) -> None:
+        if self.server:
+            self.server.shutdown()
+            self.server = None
+        self.timer.stop()
+        self.start.setText("Share")
+        self.qr.clear()
+        self.url.setText("")
+        self.status.setText(f"Stopped after {self.share.downloads} download{'s' if self.share.downloads != 1 else ''}.")
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ambar Share")
+    app.setDesktopFileName("os.ambar.Share")
+    w = ShareWindow()
+    w.add_files([Path(a) for a in sys.argv[1:]])
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

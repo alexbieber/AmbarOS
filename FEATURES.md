@@ -97,7 +97,21 @@ Details: [Security tools](docs/security.md).
 | Launchpad Security folder with Kali's categories | ✅ menu files validated · ⚠️ not yet seen in a booted desktop |
 | **Ambar OS Security** ISO (Default tier preinstalled) | ⚠️ recipe and CI build written; built and boot-tested by the GitHub workflow |
 
-## 7. For developers and testers
+## 7. Ambar's own tools
+
+Details: [Ambar's own tools](docs/ambar-tools.md).
+
+| Tool | What it does | Status |
+|---|---|---|
+| **Ambar Recon** (`ambar-recon`, Rust) | Ports and service banners, HTTP fingerprint and missing security headers, TLS and certificate trust, subdomains from CT logs and DNS; JSON output | ✅ 20 tests against real local servers, including a real TLS certificate chain |
+| **Engagement scope**, shared by every Ambar security tool | Include/exclude networks, hosts and `*.domains`, engagement dates, resolved addresses and redirects checked, activity log | ✅ unit and end-to-end tests; out-of-scope and excluded targets refused |
+| **Ambar Workbench** (`ambar-engage` + app) | Engagements, scoped runs of Recon/nmap/nuclei/…, automatic findings with severities, Markdown/HTML/PDF report | ✅ full flow tested with real scans and a real PDF |
+| **Ambar Guard** (`ambar-guard` + app) | 11 security checks with a score, one-click fixes, live per-app network connections from `/proc` | ✅ tested on a fake system and run on a real one |
+| **Ambar Clean** (`ambar-clean` + app) | Safe disk clean-up with sizes; Trash only on request | ✅ tested, including symlinks that must not be followed |
+| **Ambar Share** (`ambar-share` + app) | Send files on the local network with an unguessable link and QR code, time limit, one-time option | ✅ tested: wrong links, expiry, one-time |
+| All of the above in Launchpad and the ISO | | ✅ in the build recipe and boot test · ⚠️ not yet seen in a booted image |
+
+## 8. For developers and testers
 
 | Feature | Status |
 |---|---|

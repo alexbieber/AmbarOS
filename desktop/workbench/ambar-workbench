@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""Ambar Workbench: run security engagements: scope, scans, findings, report.
+
+A window over `ambar-engage`. Every scan goes through it, so every target is
+checked against the engagement's scope before anything is sent.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shlex
+import shutil
+import sys
+import tomllib
+from pathlib import Path
+
+from PySide6.QtCore import QProcess, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
+                               QHeaderView, QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox,
+                               QPlainTextEdit, QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget,
+                               QVBoxLayout, QWidget)
+
+ENGAGE = shutil.which("ambar-engage") or str(Path(__file__).resolve().parent / "ambar-engage")
+HOME = Path(os.environ.get("AMBAR_ENGAGEMENTS", Path.home() / "Engagements"))
+CURRENT = Path(os.environ.get("AMBAR_CONFIG", Path.home() / ".config/ambar")) / "engagement"
+TOOLS = [
+    ("recon-ports", "Ambar Recon: open ports and services", "-p top"),
+    ("recon-http", "Ambar Recon: web fingerprint and headers", ""),
+    ("recon-tls", "Ambar Recon: TLS and certificate", ""),
+    ("recon-subdomains", "Ambar Recon: subdomains (CT logs + DNS)", ""),
+    ("nmap", "nmap: service and version scan", "-T4"),
+    ("nuclei", "nuclei: template vulnerability checks", ""),
+    ("httpx", "httpx: HTTP probing", ""),
+    ("ffuf", "ffuf: content discovery (put FUZZ in the URL)", "-w /usr/share/wordlists/dirb/common.txt"),
+    ("nikto", "nikto: web server checks", ""),
+    ("testssl", "testssl.sh: full TLS audit", ""),
+]
+SEV_COLOURS = {"critical": "#7A1F1F", "high": "#C0392B", "medium": "#D9822B", "low": "#C9A227", "info": "#6B7A8F"}
+
+
+class NewDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("New engagement")
+        form = QFormLayout(self)
+        self.name = QLineEdit(placeholderText="ACME external test")
+        self.include = QLineEdit(placeholderText="203.0.113.0/24, acme.example, *.acme.example")
+        self.exclude = QLineEdit(placeholderText="optional: 203.0.113.1, vpn.acme.example")
+        self.auth = QLineEdit(placeholderText="Who authorised it: name, role, date or reference")
+        self.ends = QLineEdit(placeholderText="YYYY-MM-DD (optional)")
+        form.addRow("Name", self.name)
+        form.addRow("In scope", self.include)
+        form.addRow("Excluded", self.exclude)
+        form.addRow("Authorised by", self.auth)
+        form.addRow("Ends", self.ends)
+        note = QLabel("Only test systems you own or have written permission to test. Every scan is checked against this scope.")
+        note.setWordWrap(True)
+        form.addRow(note)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    def args(self) -> list[str]:
+        split = lambda s: [x.strip() for x in s.replace("\n", ",").split(",") if x.strip()]  # noqa: E731
+        a = ["new", self.name.text().strip(), "--include", *split(self.include.text()),
+             "--authorised-by", self.auth.text().strip()]
+        if split(self.exclude.text()):
+            a += ["--exclude", *split(self.exclude.text())]
+        if self.ends.text().strip():
+            a += ["--ends", self.ends.text().strip()]
+        return a
+
+
+class Workbench(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Ambar Workbench")
+        self.setWindowIcon(QIcon.fromTheme("ambar-workbench", QIcon.fromTheme("ambar-security")))
+        self.resize(1180, 760)
+        self.proc: QProcess | None = None
+
+        left = QWidget()
+        lv = QVBoxLayout(left)
+        lv.addWidget(QLabel("<b>Engagements</b>"))
+        self.list = QListWidget()
+        self.list.currentTextChanged.connect(self.select)
+        lv.addWidget(self.list, 1)
+        new = QPushButton(QIcon.fromTheme("list-add"), "New engagement…")
+        new.clicked.connect(self.new_engagement)
+        lv.addWidget(new)
+
+        self.tabs = QTabWidget()
+        # Scope
+        self.scope_view = QLabel()
+        self.scope_view.setTextFormat(Qt.RichText)
+        self.scope_view.setWordWrap(True)
+        self.scope_view.setAlignment(Qt.AlignTop)
+        self.tabs.addTab(self.scope_view, "Scope")
+        # Run
+        run = QWidget()
+        rv = QVBoxLayout(run)
+        row = QHBoxLayout()
+        self.tool = QComboBox()
+        for key, label, default in TOOLS:
+            self.tool.addItem(label, (key, default))
+        self.tool.currentIndexChanged.connect(lambda _: self.extra.setText(self.tool.currentData()[1]))
+        self.target = QLineEdit(placeholderText="Target: host, IP, URL or domain (must be in scope)")
+        self.extra = QLineEdit(TOOLS[0][2])
+        self.extra.setPlaceholderText("Extra arguments")
+        self.run_btn = QPushButton(QIcon.fromTheme("media-playback-start"), "Run")
+        self.run_btn.clicked.connect(self.run_tool)
+        self.stop_btn = QPushButton(QIcon.fromTheme("process-stop"), "Stop")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(lambda: self.proc and self.proc.kill())
+        row.addWidget(self.tool, 2)
+        row.addWidget(self.target, 3)
+        row.addWidget(self.extra, 2)
+        row.addWidget(self.run_btn)
+        row.addWidget(self.stop_btn)
+        rv.addLayout(row)
+        self.output = QPlainTextEdit(readOnly=True)
+        mono = QFont("monospace")
+        mono.setStyleHint(QFont.Monospace)
+        self.output.setFont(mono)
+        rv.addWidget(self.output, 1)
+        self.tabs.addTab(run, "Run")
+        # Findings
+        fw = QWidget()
+        fv = QVBoxLayout(fw)
+        self.summary = QLabel()
+        fv.addWidget(self.summary)
+        self.findings = QTableWidget(0, 4)
+        self.findings.setHorizontalHeaderLabels(["Severity", "Target", "Finding", "Source"])
+        self.findings.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.findings.verticalHeader().hide()
+        self.findings.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.findings.cellClicked.connect(self.show_detail)
+        fv.addWidget(self.findings, 2)
+        self.detail = QLabel()
+        self.detail.setWordWrap(True)
+        fv.addWidget(self.detail)
+        self.tabs.addTab(fw, "Findings")
+        # Report
+        rw = QWidget()
+        rpv = QVBoxLayout(rw)
+        rpv.addWidget(QLabel("The report lists the engagement, scope, every finding by severity and the activity log."))
+        rrow = QHBoxLayout()
+        for fmt, label in (("pdf", "Create PDF report"), ("html", "Create HTML report"), ("md", "Create Markdown report")):
+            b = QPushButton(QIcon.fromTheme("document-export"), label)
+            b.clicked.connect(lambda _=False, f=fmt: self.report(f))
+            rrow.addWidget(b)
+        rpv.addLayout(rrow)
+        self.report_status = QLabel()
+        rpv.addWidget(self.report_status)
+        rpv.addStretch(1)
+        self.tabs.addTab(rw, "Report")
+
+        split = QSplitter()
+        split.addWidget(left)
+        split.addWidget(self.tabs)
+        split.setStretchFactor(1, 4)
+        self.setCentralWidget(split)
+        self.reload()
+
+    # ---------------------------------------------------------------- data
+
+    def engagement_dir(self) -> Path | None:
+        item = self.list.currentItem()
+        return HOME / item.text() if item else None
+
+    def reload(self) -> None:
+        names = sorted(p.parent.name for p in HOME.glob("*/scope.toml"))
+        cur = CURRENT.read_text().strip() if CURRENT.exists() else ""
+        self.list.blockSignals(True)
+        self.list.clear()
+        self.list.addItems(names)
+        self.list.blockSignals(False)
+        if names:
+            self.list.setCurrentRow(names.index(cur) if cur in names else 0)
+        else:
+            self.scope_view.setText("<h3>No engagements yet</h3><p>Click <b>New engagement…</b> and write down what "
+                                    "you're allowed to test. Every tool here only touches targets in that scope.</p>")
+
+    def select(self, name: str) -> None:
+        if not name:
+            return
+        CURRENT.parent.mkdir(parents=True, exist_ok=True)
+        CURRENT.write_text(name)
+        d = HOME / name
+        cfg = tomllib.loads((d / "scope.toml").read_text())
+        e, s = cfg.get("engagement", {}), cfg.get("scope", {})
+        self.scope_view.setText(
+            f"<h2>{e.get('name', name)}</h2>"
+            f"<p><b>Authorised by:</b> {e.get('authorised_by', '—')}<br>"
+            f"<b>Period:</b> {e.get('starts', '—')} to {e.get('ends', 'open-ended')}</p>"
+            f"<p><b>In scope:</b><br>{'<br>'.join(s.get('include', []))}</p>"
+            f"<p><b>Excluded:</b><br>{'<br>'.join(s.get('exclude', [])) or 'nothing'}</p>"
+            f"<p style='color:gray'>Folder: {d}</p>")
+        self.load_findings()
+
+    def load_findings(self) -> None:
+        d = self.engagement_dir()
+        try:
+            f = json.loads((d / "findings.json").read_text()) if d else []
+        except (OSError, ValueError):
+            f = []
+        self._findings = f
+        self.findings.setRowCount(len(f))
+        for r, x in enumerate(f):
+            sev = QTableWidgetItem(x["severity"].capitalize())
+            sev.setForeground(QColor(SEV_COLOURS.get(x["severity"], "#333")))
+            bold = sev.font()
+            bold.setBold(True)
+            sev.setFont(bold)
+            for c, item in enumerate([sev, QTableWidgetItem(x["target"]), QTableWidgetItem(x["title"]), QTableWidgetItem(x["source"])]):
+                self.findings.setItem(r, c, item)
+        self.findings.resizeColumnToContents(0)
+        self.findings.resizeColumnToContents(1)
+        counts = {s: sum(x["severity"] == s for x in f) for s in SEV_COLOURS}
+        self.summary.setText("  ".join(f"<span style='color:{SEV_COLOURS[s]}'><b>{n}</b> {s}</span>" for s, n in counts.items()))
+        self.tabs.setTabText(2, f"Findings ({len(f)})")
+
+    def show_detail(self, row: int, _col: int) -> None:
+        x = self._findings[row]
+        self.detail.setText(f"<b>{x['title']}</b> — {x['target']}<br>{x['detail'] or ''}<br><i>{x['source']}, {x['found']}</i>")
+
+    # ---------------------------------------------------------------- actions
+
+    def engage(self, args: list[str], on_done=None) -> None:
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(
+            lambda: self.output.appendPlainText(bytes(self.proc.readAllStandardOutput()).decode(errors="replace").rstrip()))
+        self.proc.finished.connect(lambda code, _s: self.finished(code, on_done))
+        self.run_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.proc.start(sys.executable, [ENGAGE, *args])
+
+    def finished(self, code: int, on_done) -> None:
+        self.run_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.output.appendPlainText(f"— finished (exit {code}) —\n")
+        self.load_findings()
+        if on_done:
+            on_done(code)
+
+    def run_tool(self) -> None:
+        target = self.target.text().strip()
+        if not target or not self.engagement_dir():
+            self.output.appendPlainText("Choose an engagement and a target first.")
+            return
+        key, _ = self.tool.currentData()
+        args = ["run", key, target]
+        if self.extra.text().strip():
+            args += ["--", *shlex.split(self.extra.text())]
+        self.tabs.setCurrentIndex(1)
+        self.output.appendPlainText(f"▶ {key} {target}")
+        self.engage(args)
+
+    def new_engagement(self) -> None:
+        dlg = NewDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        self.create(dlg.args())
+
+    def create(self, args: list[str]) -> None:
+        def done(code):
+            if code != 0:
+                QMessageBox.warning(self, "Engagement not created", self.output.toPlainText().strip().splitlines()[-2])
+            self.reload()
+        self.engage(args, done)
+
+    def report(self, fmt: str) -> None:
+        def done(code):
+            d = self.engagement_dir()
+            path = d / f"report.{fmt}" if d else None
+            if code == 0 and path and path.exists():
+                self.report_status.setText(f"Written: {path}")
+                if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+            else:
+                self.report_status.setText("The report couldn't be written; see the Run tab.")
+        self.engage(["report", "--format", fmt], done)
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ambar Workbench")
+    app.setDesktopFileName("os.ambar.Workbench")
+    w = Workbench()
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

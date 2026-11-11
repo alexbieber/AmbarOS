@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ambar Guard
+GenericName=Security Check
+Comment=Check this computer's security settings, fix them, and see which apps use the network
+Exec=ambar-guard-app
+Icon=ambar-guard
+Terminal=false
+Categories=System;Security;
+Keywords=firewall;security;hardening;network;connections;privacy;

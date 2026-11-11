@@ -292,3 +292,19 @@ def test_installer_package_cleanup_tolerates_missing_packages():
     assert "remove" not in keys and "try_remove" in keys
     removed = next(op["try_remove"] for op in conf["operations"] if "try_remove" in op)
     assert "calamares" in removed and "^live-*" in removed
+
+
+def test_ambar_tools_are_in_the_image():
+    b = (U / "build.sh").read_text()
+    assert "--bin ambar-recon" in b and '"$ROOT/usr/bin/ambar-recon"' in b
+    assert "for d in workbench guard utils" in b
+    assert "ambar-guard check --json" in b, "the build runs the Guard once"
+    pk = listfile(U / "packages.txt")
+    assert {"qrencode", "unattended-upgrades", "ufw", "iproute2"} <= set(pk)
+    smoke = (U / "smoke.py").read_text()
+    for tool in ["ambar-recon", "ambar-engage", "ambar-workbench", "ambar-guard", "ambar-clean", "ambar-share"]:
+        assert tool in smoke, tool
+    repo = U.parents[1]
+    for d in ["workbench", "guard", "utils"]:
+        assert list((repo / "desktop" / d).glob("os.ambar.*.desktop")), d
+    assert "--bin ambar-recon" in (repo / ".github/workflows/os-ubuntu.yml").read_text()

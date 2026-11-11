@@ -162,6 +162,7 @@ The extra layer: automations that run in the background, an AI assistant that dr
 | 🛍️ **Install anything** | Ambar Store (apt, Flathub, Snap), `.deb` double-click, AppImage, Wine, distrobox/podman, codecs, Driver Manager |
 | 🖥️ **Ambar apps** | Automation Center (Qt/QML), Meta+Space search for automations, first-run Welcome, the Ambar logo and theme |
 | 🛡️ **Security tools** | Kali's default set (204 packages covered) in Kali's tiers and categories, with modern replacements (NetExec, nuclei, ffuf, subfinder, enum4linux-ng…), the `ambar-sec` command, the Ambar Security app and a Security edition ISO |
+| 🧰 **Ambar's own tools** | **Recon** (Rust scanner), **Workbench** (scope → scans → findings → PDF report), **Guard** (security score, fixes, live connections), **Clean** and **Share**, all scope-aware where it matters ([details](docs/ambar-tools.md)) |
 | 🔧 **Tools** | `ambar` CLI, Python SDK, `ambar-hwreport` for hardware reports |
 
 ```mermaid

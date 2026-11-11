@@ -1,0 +1,467 @@
+#!/usr/bin/env python3
+"""ambar-engage: run a security engagement end to end, inside its scope.
+
+    ambar-engage new NAME --include NET_OR_DOMAIN... [--exclude ...] --authorised-by TEXT [--ends YYYY-MM-DD]
+    ambar-engage list | use NAME | show
+    ambar-engage run TOOL TARGET [-- EXTRA ARGS]      every target is checked against the scope first
+    ambar-engage findings [--add TITLE --severity S --target T --detail TEXT]
+    ambar-engage report [--format md|html|pdf]
+
+An engagement is a folder (~/Engagements/<name>) holding scope.toml, every run's
+output, the findings and the report. Scope checks use ambar-recon's checker, so
+every Ambar tool applies exactly the same rules. Tool output is turned into
+findings for ambar-recon, nmap and nuclei; other tools' output is kept as-is.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import html
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tomllib
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+HOME = Path(os.environ.get("AMBAR_ENGAGEMENTS", Path.home() / "Engagements"))
+CURRENT = Path(os.environ.get("AMBAR_CONFIG", Path.home() / ".config/ambar")) / "engagement"
+SEVERITIES = ["critical", "high", "medium", "low", "info"]
+RECON = os.environ.get("AMBAR_RECON", shutil.which("ambar-recon") or "ambar-recon")
+
+# Exposed services that are usually a finding by themselves.
+RISKY_PORTS = {
+    2375: ("high", "Docker API exposed without TLS", "Anyone who reaches it can run containers as root on the host."),
+    23: ("medium", "Telnet exposed", "Telnet sends passwords in clear text. Use SSH."),
+    21: ("medium", "FTP exposed", "FTP sends passwords in clear text. Use SFTP."),
+    6379: ("medium", "Redis exposed", "Redis has no authentication by default."),
+    27017: ("medium", "MongoDB exposed", "Check authentication is enabled and the port isn't public."),
+    9200: ("medium", "Elasticsearch exposed", "Check authentication; open clusters leak data."),
+    11211: ("medium", "Memcached exposed", "No authentication; can be abused for amplification."),
+    2379: ("medium", "etcd exposed", "etcd can hold cluster secrets."),
+    3389: ("low", "Remote Desktop exposed", "Restrict RDP to a VPN or allow-list."),
+    5900: ("low", "VNC exposed", "Restrict VNC to a VPN or allow-list."),
+    445: ("low", "SMB exposed", "Restrict SMB to the internal network."),
+}
+
+
+class Fail(Exception):
+    pass
+
+
+# ----------------------------------------------------------------- engagements
+
+def slug(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not s:
+        raise Fail("give the engagement a name with letters or digits")
+    return s
+
+
+def current() -> Path:
+    if not CURRENT.exists():
+        raise Fail("no engagement selected: run 'ambar-engage new …' or 'ambar-engage use NAME'")
+    d = HOME / CURRENT.read_text().strip()
+    if not (d / "scope.toml").exists():
+        raise Fail(f"engagement folder {d} has no scope.toml")
+    return d
+
+
+def toml_list(items: list[str]) -> str:
+    return "[" + ", ".join(json.dumps(i) for i in items) + "]"
+
+
+def cmd_new(a) -> int:
+    d = HOME / slug(a.name)
+    if d.exists():
+        raise Fail(f"{d} already exists")
+    if len(a.authorised_by.strip()) < 5:
+        raise Fail("--authorised-by must say who authorised the test (name, role, date or reference)")
+    start = a.starts or dt.date.today().isoformat()
+    text = (
+        "# Engagement scope. Every Ambar security tool refuses targets outside it.\n"
+        "[engagement]\n"
+        f"name = {json.dumps(a.name)}\n"
+        f"authorised_by = {json.dumps(a.authorised_by.strip())}\n"
+        f"starts = {start}\n"
+        + (f"ends = {a.ends}\n" if a.ends else "")
+        + "\n[scope]\n"
+        f"include = {toml_list(a.include)}\n"
+        f"exclude = {toml_list(a.exclude or [])}\n"
+    )
+    d.mkdir(parents=True)
+    (d / "runs").mkdir()
+    (d / "scope.toml").write_text(text)
+    check = subprocess.run([RECON, "--json", "--scope", str(d / "scope.toml"), "scope", "localhost"], capture_output=True, text=True)
+    if check.returncode != 0:
+        shutil.rmtree(d)
+        err = [l.strip() for l in check.stderr.splitlines() if l.strip() and not l.strip()[0].isdigit()]
+        raise Fail("the scope isn't valid: " + " ".join(err[:6]))
+    (d / "findings.json").write_text("[]\n")
+    CURRENT.parent.mkdir(parents=True, exist_ok=True)
+    CURRENT.write_text(d.name)
+    print(f"Created {d} and made it the current engagement.")
+    return 0
+
+
+def cmd_list(a) -> int:
+    cur = CURRENT.read_text().strip() if CURRENT.exists() else ""
+    for d in sorted(HOME.glob("*/scope.toml")):
+        info = tomllib.loads(d.read_text()).get("engagement", {})
+        mark = "*" if d.parent.name == cur else " "
+        print(f"{mark} {d.parent.name:<28} {info.get('name', '')}  (until {info.get('ends', 'open-ended')})")
+    return 0
+
+
+def cmd_use(a) -> int:
+    d = HOME / slug(a.name)
+    if not (d / "scope.toml").exists():
+        raise Fail(f"no engagement {a.name} in {HOME}")
+    CURRENT.parent.mkdir(parents=True, exist_ok=True)
+    CURRENT.write_text(d.name)
+    print(f"Current engagement: {d.name}")
+    return 0
+
+
+def cmd_show(a) -> int:
+    d = current()
+    print((d / "scope.toml").read_text())
+    f = load_findings(d)
+    print(f"{len(f)} findings, {len(list((d / 'runs').glob('*.log')))} runs")
+    return 0
+
+
+# ----------------------------------------------------------------- scope
+
+def in_scope(d: Path, target: str) -> tuple[bool, str]:
+    """One scope implementation for every tool: ambar-recon's. Fails closed."""
+    try:
+        r = subprocess.run([RECON, "--json", "--scope", str(d / "scope.toml"), "scope", target],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, f"can't check the scope ({e})"
+    for line in r.stdout.splitlines():
+        try:
+            v = json.loads(line)
+        except ValueError:
+            continue
+        if v.get("in_scope") == target:
+            return True, ""
+        if "refused" in v:
+            return False, v.get("reason", "outside the scope")
+    return False, (r.stderr.strip() or "can't check the scope")
+
+
+# ----------------------------------------------------------------- tools
+
+def tool_command(tool: str, target: str, out: Path, extra: list[str]) -> list[str]:
+    """How each tool takes its target, and where it writes machine-readable output."""
+    if tool.startswith("recon-"):
+        return [RECON, "--json", "--scope", str(out.parent.parent / "scope.toml"), tool.removeprefix("recon-"), target, *extra]
+    table = {
+        "nmap": ["nmap", "-sV", "-oX", str(out.with_suffix(".xml")), *extra, target],
+        "nuclei": ["nuclei", "-u", target, "-jsonl", "-o", str(out.with_suffix(".jsonl")), *extra],
+        "httpx": ["httpx", "-u", target, "-json", "-o", str(out.with_suffix(".jsonl")), *extra],
+        "subfinder": ["subfinder", "-d", target, "-json", "-o", str(out.with_suffix(".jsonl")), *extra],
+        "ffuf": ["ffuf", "-u", target, "-of", "json", "-o", str(out.with_suffix(".json")), *extra],
+        "nikto": ["nikto", "-h", target, *extra],
+        "sslscan": ["sslscan", *extra, target],
+        "testssl": ["testssl", *extra, target],
+        "whatweb": ["whatweb", *extra, target],
+        "wafw00f": ["wafw00f", *extra, target],
+    }
+    if tool in table:
+        return table[tool]
+    # Any other tool: the target goes last.
+    return [tool, *extra, target]
+
+
+def ffuf_host(target: str) -> str:
+    return target.replace("FUZZ", "x")
+
+
+def cmd_run(a) -> int:
+    d = current()
+    check_target = ffuf_host(a.target) if a.tool == "ffuf" else a.target
+    ok, why = in_scope(d, check_target)
+    if not ok:
+        log(d, f"REFUSED {a.tool} {a.target}: {why}")
+        raise Fail(f"{a.target} refused: {why}")
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = d / "runs" / f"{stamp}-{a.tool}"
+    cmd = tool_command(a.tool, a.target, out, a.extra)
+    if not shutil.which(cmd[0]) and not Path(cmd[0]).exists():
+        raise Fail(f"{cmd[0]} isn't installed. Try: ambar-sec install {a.tool if not a.tool.startswith('recon') else 'default'}")
+    log(d, "RUN " + " ".join(shlex.quote(c) for c in cmd))
+    print("$ " + " ".join(shlex.quote(c) for c in cmd), flush=True)
+    with open(out.with_suffix(".log"), "w") as logf:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in p.stdout:
+            sys.stdout.write(line)
+            logf.write(line)
+        code = p.wait()
+    new = import_results(a.tool, a.target, out)
+    if new:
+        f = load_findings(d)
+        known = {(x["title"], x["target"]) for x in f}
+        added = [n for n in new if (n["title"], n["target"]) not in known]
+        f += added
+        save_findings(d, f)
+        print(f"\n{len(added)} new findings ({len(new) - len(added)} already known).")
+    log(d, f"DONE {a.tool} {a.target} exit={code}")
+    return code
+
+
+# ----------------------------------------------------------------- findings
+
+def finding(title: str, severity: str, target: str, detail: str, source: str) -> dict:
+    return {"title": title, "severity": severity, "target": target, "detail": detail, "source": source,
+            "found": dt.datetime.now().isoformat(timespec="seconds")}
+
+
+def import_results(tool: str, target: str, out: Path) -> list[dict]:
+    found: list[dict] = []
+    if tool.startswith("recon-"):
+        for line in out.with_suffix(".log").read_text().splitlines():
+            try:
+                v = json.loads(line)
+            except ValueError:
+                continue
+            if "port" in v:
+                sev, title, why = RISKY_PORTS.get(v["port"], ("info", f"Open port {v['port']}/tcp ({v['service']})", v.get("banner") or ""))
+                found.append(finding(title, sev, f"{v['ip']}:{v['port']}", why, "ambar-recon"))
+            elif "missing_security_headers" in v:
+                if v["missing_security_headers"]:
+                    found.append(finding("Missing security headers", "low", v["final_url"],
+                                         ", ".join(v["missing_security_headers"]), "ambar-recon"))
+                if v.get("weak_cookies"):
+                    found.append(finding("Cookies without HttpOnly/Secure", "low", v["final_url"],
+                                         ", ".join(v["weak_cookies"]), "ambar-recon"))
+            elif "problems" in v:
+                for p in v["problems"]:
+                    sev = "high" if "expired" in p else "medium" if ("not trusted" in p or "self-signed" in p) else "low"
+                    found.append(finding(f"TLS: {p}", sev, v["target"], f"{v['protocol']} {v['cipher']}; issuer {v['issuer']}", "ambar-recon"))
+    elif tool == "nmap" and out.with_suffix(".xml").exists():
+        root = ET.parse(out.with_suffix(".xml")).getroot()
+        for host in root.iter("host"):
+            a_el = host.find("address")
+            addr = a_el.get("addr", target) if a_el is not None else target
+            for port in host.iter("port"):
+                st = port.find("state")
+                if st is None or st.get("state") != "open":
+                    continue
+                n = int(port.get("portid", "0"))
+                svc = port.find("service")
+                desc = " ".join(filter(None, [svc.get("product"), svc.get("version")])) if svc is not None else ""
+                name = svc.get("name", "unknown") if svc is not None else "unknown"
+                sev, title, why = RISKY_PORTS.get(n, ("info", f"Open port {n}/{port.get('protocol')} ({name})", desc))
+                found.append(finding(title, sev, f"{addr}:{n}", why if n in RISKY_PORTS else desc, "nmap"))
+    elif tool == "nuclei" and out.with_suffix(".jsonl").exists():
+        for line in out.with_suffix(".jsonl").read_text().splitlines():
+            try:
+                v = json.loads(line)
+            except ValueError:
+                continue
+            info = v.get("info", {})
+            sev = info.get("severity", "info").lower()
+            found.append(finding(info.get("name", v.get("template-id", "nuclei finding")),
+                                 sev if sev in SEVERITIES else "info",
+                                 v.get("matched-at", v.get("host", target)),
+                                 info.get("description", "").strip(), f"nuclei:{v.get('template-id', '')}"))
+    return found
+
+
+def load_findings(d: Path) -> list[dict]:
+    try:
+        return json.loads((d / "findings.json").read_text())
+    except (OSError, ValueError):
+        return []
+
+
+def save_findings(d: Path, f: list[dict]) -> None:
+    f.sort(key=lambda x: (SEVERITIES.index(x["severity"]), x["target"], x["title"]))
+    (d / "findings.json").write_text(json.dumps(f, indent=2) + "\n")
+
+
+def cmd_findings(a) -> int:
+    d = current()
+    f = load_findings(d)
+    if a.add:
+        if not a.target:
+            raise Fail("--target is needed with --add")
+        ok, why = in_scope(d, a.target)
+        if not ok:
+            raise Fail(f"{a.target} is outside the scope: {why}")
+        f.append(finding(a.add, a.severity, a.target, a.detail or "", "manual"))
+        save_findings(d, f)
+        log(d, f"FINDING {a.severity} {a.target}: {a.add}")
+        print("Added.")
+        return 0
+    if a.json:
+        print(json.dumps(f, indent=2))
+        return 0
+    for x in f:
+        print(f"[{x['severity'].upper():<8}] {x['target']:<28} {x['title']}")
+    print(f"\n{len(f)} findings: " + ", ".join(f"{sum(x['severity'] == s for x in f)} {s}" for s in SEVERITIES))
+    return 0
+
+
+# ----------------------------------------------------------------- report
+
+def report_markdown(d: Path) -> str:
+    cfg = tomllib.loads((d / "scope.toml").read_text())
+    e, sc = cfg.get("engagement", {}), cfg.get("scope", {})
+    f = load_findings(d)
+    counts = {s: sum(x["severity"] == s for x in f) for s in SEVERITIES}
+    lines = [f"# {e.get('name', d.name)}: security assessment report", "",
+             f"*Generated {dt.datetime.now():%Y-%m-%d %H:%M} with Ambar OS Workbench.*", "",
+             "## Engagement", "",
+             f"- **Authorised by:** {e.get('authorised_by', '—')}",
+             f"- **Period:** {e.get('starts', '—')} to {e.get('ends', 'open-ended')}",
+             f"- **In scope:** {', '.join(sc.get('include', []))}",
+             f"- **Excluded:** {', '.join(sc.get('exclude', [])) or 'nothing'}", "",
+             "## Summary", "",
+             "| Severity | Findings |", "|---|---|"]
+    lines += [f"| {s.capitalize()} | {counts[s]} |" for s in SEVERITIES]
+    lines += ["", "## Findings", ""]
+    if not f:
+        lines.append("No findings were recorded.")
+    for i, x in enumerate(f, 1):
+        lines += [f"### {i}. {x['title']}", "",
+                  f"- **Severity:** {x['severity'].capitalize()}",
+                  f"- **Target:** `{x['target']}`",
+                  f"- **Source:** {x['source']}, {x['found']}", ""]
+        if x["detail"]:
+            lines += [x["detail"], ""]
+    runs = sorted((d / "runs").glob("*.log"))
+    lines += ["## Activity", "", f"{len(runs)} tool runs. Full log: `activity.log`; raw output in `runs/`.", ""]
+    if (d / "activity.log").exists():
+        lines += ["```"] + (d / "activity.log").read_text().splitlines()[-40:] + ["```", ""]
+    return "\n".join(lines)
+
+
+def markdown_to_html(md: str, title: str) -> str:
+    out, in_code, in_table = [], False, False
+    for line in md.splitlines():
+        if line.startswith("```"):
+            out.append("</pre>" if in_code else "<pre>")
+            in_code = not in_code
+            continue
+        if in_code:
+            out.append(html.escape(line))
+            continue
+        if line.startswith("|"):
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if all(set(c) <= {"-", ":"} for c in cells):
+                continue
+            if not in_table:
+                out.append("<table>")
+                in_table = True
+                out.append("<tr>" + "".join(f"<th>{html.escape(c)}</th>" for c in cells) + "</tr>")
+            else:
+                out.append("<tr>" + "".join(f"<td>{html.escape(c)}</td>" for c in cells) + "</tr>")
+            continue
+        if in_table:
+            out.append("</table>")
+            in_table = False
+        esc = html.escape(line)
+        esc = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc)
+        esc = re.sub(r"`(.+?)`", r"<code>\1</code>", esc)
+        esc = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<i>\1</i>", esc)
+        if line.startswith("### "):
+            out.append(f"<h3>{esc[4:]}</h3>")
+        elif line.startswith("## "):
+            out.append(f"<h2>{esc[3:]}</h2>")
+        elif line.startswith("# "):
+            out.append(f"<h1>{esc[2:]}</h1>")
+        elif line.startswith("- "):
+            out.append(f"<p class=li>• {esc[2:]}</p>")
+        elif line.strip():
+            out.append(f"<p>{esc}</p>")
+    if in_table:
+        out.append("</table>")
+    style = ("body{font-family:Inter,sans-serif;max-width:860px;margin:40px auto;color:#211a14}"
+             "h1{color:#B35C05}h2{border-bottom:1px solid #e5d9cc;padding-bottom:4px}"
+             "table{border-collapse:collapse}td,th{border:1px solid #d9cbbd;padding:4px 10px}"
+             "pre{background:#f6f0ea;padding:10px;font-size:11px;white-space:pre-wrap}p.li{margin:2px 0}")
+    return f"<!doctype html><html><head><meta charset=utf-8><title>{html.escape(title)}</title><style>{style}</style></head><body>{''.join(out)}</body></html>"
+
+
+def cmd_report(a) -> int:
+    d = current()
+    md = report_markdown(d)
+    (d / "report.md").write_text(md)
+    made = [d / "report.md"]
+    if a.format in ("html", "pdf"):
+        doc = markdown_to_html(md, d.name)
+        (d / "report.html").write_text(doc)
+        made.append(d / "report.html")
+    if a.format == "pdf":
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        try:
+            from PySide6.QtGui import QGuiApplication, QPageSize, QPdfWriter, QTextDocument
+        except ImportError as e:
+            raise Fail("PDF needs PySide6; the Markdown and HTML reports were written") from e
+        app = QGuiApplication.instance() or QGuiApplication([])
+        writer = QPdfWriter(str(d / "report.pdf"))
+        writer.setPageSize(QPageSize(QPageSize.A4))
+        writer.setTitle(d.name)
+        td = QTextDocument()
+        td.setHtml(doc)
+        td.print_(writer)
+        del app
+        made.append(d / "report.pdf")
+    log(d, "REPORT " + " ".join(p.name for p in made))
+    for p in made:
+        print(p)
+    return 0
+
+
+def log(d: Path, msg: str) -> None:
+    with open(d / "activity.log", "a") as f:
+        f.write(f"{dt.datetime.now().astimezone().isoformat(timespec='seconds')} {msg}\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="ambar-engage", description=__doc__.split("\n")[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("new", help="start an engagement")
+    s.add_argument("name")
+    s.add_argument("--include", nargs="+", required=True, help="networks, hosts, *.domains you may test")
+    s.add_argument("--exclude", nargs="*", default=[])
+    s.add_argument("--authorised-by", required=True, help="who authorised it (name, role, date or reference)")
+    s.add_argument("--starts")
+    s.add_argument("--ends")
+    sub.add_parser("list", help="all engagements")
+    s = sub.add_parser("use", help="switch engagement")
+    s.add_argument("name")
+    sub.add_parser("show", help="the current engagement")
+    s = sub.add_parser("run", help="run a tool against an in-scope target")
+    s.add_argument("tool", help="recon-ports, recon-http, recon-tls, recon-subdomains, nmap, nuclei, httpx, ffuf, … or any tool")
+    s.add_argument("target")
+    s.add_argument("extra", nargs=argparse.REMAINDER)
+    s = sub.add_parser("findings", help="list or add findings")
+    s.add_argument("--add", metavar="TITLE")
+    s.add_argument("--severity", choices=SEVERITIES, default="medium")
+    s.add_argument("--target")
+    s.add_argument("--detail")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("report", help="write the report")
+    s.add_argument("--format", choices=["md", "html", "pdf"], default="pdf")
+    a = p.parse_args(argv)
+    if getattr(a, "extra", None) and a.extra[0] == "--":
+        a.extra = a.extra[1:]
+    try:
+        return {"new": cmd_new, "list": cmd_list, "use": cmd_use, "show": cmd_show, "run": cmd_run,
+                "findings": cmd_findings, "report": cmd_report}[a.cmd](a)
+    except Fail as e:
+        print(f"ambar-engage: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

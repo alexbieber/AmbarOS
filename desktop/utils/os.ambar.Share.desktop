@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ambar Share
+GenericName=Share Files
+Comment=Send files to a phone or computer on the same network
+Exec=ambar-share-app %F
+Icon=ambar-share
+Terminal=false
+MimeType=application/octet-stream;
+Categories=Network;FileTransfer;
+Keywords=send;share;phone;qr;transfer;airdrop;

@@ -5,7 +5,7 @@
   <Menu>
     <Name>Ambar Security</Name>
     <Directory>ambar-security.directory</Directory>
-    <Include><Filename>os.ambar.Security.desktop</Filename></Include>
+    <Include><Filename>os.ambar.Security.desktop</Filename><Filename>os.ambar.Workbench.desktop</Filename></Include>
     <Menu>
       <Name>01-information-gathering</Name>
       <Directory>ambar-security-information-gathering.directory</Directory>

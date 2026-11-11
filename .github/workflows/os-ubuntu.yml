@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Build Ambar binaries
-        run: cargo build --release --locked --bin ambar --bin ambard
+        run: cargo build --release --locked --bin ambar --bin ambard --bin ambar-recon
       - name: Install image tools
         run: |
           sudo apt-get update

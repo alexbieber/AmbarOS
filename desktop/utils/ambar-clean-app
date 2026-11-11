@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Ambar Clean: see what takes space and free it, safely."""
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QIcon
+from PySide6.QtWidgets import QApplication, QCheckBox, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
+
+CLI = shutil.which("ambar-clean") or str(Path(__file__).resolve().parent / "ambar-clean")
+
+
+def _clean():
+    loader = importlib.machinery.SourceFileLoader("ambar_clean", CLI)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("ambar_clean", loader))
+    sys.modules["ambar_clean"] = mod
+    loader.exec_module(mod)
+    return mod
+
+
+class CleanWindow(QMainWindow):
+    def __init__(self, runner=None):
+        super().__init__()
+        self.c = _clean()
+        self.runner = runner or self.run_in_terminal
+        self.setWindowTitle("Ambar Clean")
+        self.setWindowIcon(QIcon.fromTheme("ambar-clean", QIcon.fromTheme("edit-clear-all")))
+        self.resize(760, 520)
+        root = QWidget()
+        v = QVBoxLayout(root)
+        self.total = QLabel()
+        f = QFont()
+        f.setPointSize(22)
+        f.setBold(True)
+        self.total.setFont(f)
+        v.addWidget(self.total)
+        v.addWidget(QLabel("Everything ticked is rebuilt or re-downloaded when it's needed again. Emptying the Trash is permanent."))
+        self.grid = QGridLayout()
+        self.grid.setColumnStretch(1, 1)
+        v.addLayout(self.grid)
+        v.addStretch(1)
+        row = QHBoxLayout()
+        self.rescan = QPushButton(QIcon.fromTheme("view-refresh"), "Scan again")
+        self.rescan.clicked.connect(self.scan)
+        self.go = QPushButton(QIcon.fromTheme("edit-clear-all"), "Clean")
+        self.go.clicked.connect(self.clean)
+        row.addStretch(1)
+        row.addWidget(self.rescan)
+        row.addWidget(self.go)
+        v.addLayout(row)
+        self.setCentralWidget(root)
+        self.boxes: dict[str, QCheckBox] = {}
+        self.scan()
+
+    def scan(self) -> None:
+        while self.grid.count():
+            w = self.grid.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        self.items = self.c.items()
+        self.boxes = {}
+        for r, i in enumerate(self.items):
+            box = QCheckBox(i.title)
+            box.setChecked(i.safe and self.c.worth(i))
+            box.setEnabled(self.c.worth(i))
+            box.toggled.connect(self.update_total)
+            self.boxes[i.id] = box
+            amount = self.c.human(i.size) if i.size else (f"{i.count} to remove" if i.count else "nothing")
+            about = QLabel(f"<span style='color:gray'>{i.about}</span>")
+            about.setWordWrap(True)
+            size = QLabel(f"<b>{amount}</b>")
+            self.grid.addWidget(box, r, 0)
+            self.grid.addWidget(about, r, 1)
+            self.grid.addWidget(size, r, 2, Qt.AlignRight)
+        self.update_total()
+
+    def chosen(self) -> list[str]:
+        return [k for k, b in self.boxes.items() if b.isChecked()]
+
+    def update_total(self) -> None:
+        total = sum(i.size for i in self.items if i.id in self.chosen())
+        self.total.setText(f"{self.c.human(total)} can be freed")
+        self.go.setEnabled(bool(self.chosen()))
+
+    def clean(self) -> None:
+        args = ["run", *self.chosen()]
+        if "trash" in self.chosen():
+            args.append("--yes")  # the checkbox is the confirmation; its label says it's permanent
+        self.runner(args)
+
+    def run_in_terminal(self, args: list[str]) -> None:
+        cmd = " ".join(shlex.quote(a) for a in [CLI, *args])
+        term = shutil.which("konsole")
+        p = subprocess.Popen([term, "--hold", "-e", "sh", "-c", cmd] if term else ["x-terminal-emulator", "-e", "sh", "-c", cmd])
+        self.poll(p)
+
+    def poll(self, p) -> None:
+        if p.poll() is None:
+            QTimer.singleShot(1000, lambda: self.poll(p))
+        else:
+            self.scan()
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ambar Clean")
+    app.setDesktopFileName("os.ambar.Clean")
+    w = CleanWindow()
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

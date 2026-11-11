@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ambar Workbench
+GenericName=Security Engagements
+Comment=Scope, scans, findings and reports for authorised security tests
+Exec=ambar-workbench
+Icon=ambar-workbench
+Terminal=false
+Categories=System;Security;X-Ambar-Security;
+Keywords=pentest;engagement;scope;report;findings;recon;
