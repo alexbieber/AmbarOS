@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Ambar OS doesn't work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Please check [Troubleshooting](https://alexbieber.github.io/AmbarOS/troubleshooting/) first. Security problems go to a [private report](https://github.com/alexbieber/AmbarOS/security/advisories/new), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where are you running it?
+      options:
+        - Installed Ambar OS
+        - Live USB
+        - Virtual machine
+        - Ambar software on another Linux
+        - Ambar software on macOS
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: System information
+      description: Output of the commands in "Collect information for a bug report". Remove anything you consider private.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`journalctl --user -u ambard -n 100 --no-pager` and `ambar history --steps | head -40`"
+      render: text

@@ -1,0 +1,17 @@
+/* Ambar brand colours (same as the Plasma theme; AA contrast checked there). */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #B35C05;
+  --md-primary-fg-color--light: #F2A43A;
+  --md-primary-fg-color--dark: #8A4604;
+  --md-accent-fg-color: #B35C05;
+  --md-typeset-a-color: #A45404;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1A1612;
+  --md-primary-fg-color--light: #2A241E;
+  --md-primary-fg-color--dark: #0E0C0A;
+  --md-accent-fg-color: #F2A43A;
+  --md-typeset-a-color: #F2A43A;
+  --md-default-bg-color: #15120F;
+}
+.md-header__button.md-logo img { height: 1.4rem; }

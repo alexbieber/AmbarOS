@@ -23,8 +23,9 @@ def containerfile():
 
 
 def test_copy_sources_exist():
-    for line in containerfile().splitlines():
-        m = re.match(r"COPY\s+(?!--from)(\S+(?:\s+\S+)*)\s+(\S+)$", line.strip())
+    text = containerfile() + "\n" + (OS / "live" / "Containerfile").read_text()
+    for line in text.splitlines():
+        m = re.match(r"COPY\s+(?!--from)(?:--chmod=\S+\s+)?(\S+(?:\s+\S+)*)\s+(\S+)$", line.strip())
         if m:
             for src in m.group(1).split():
                 assert (ROOT / src).exists(), f"COPY source missing: {src}"
@@ -78,7 +79,8 @@ def test_branding_script(tmp_path):
 
 
 def test_shell_scripts():
-    scripts = [OS / "build.sh", OS / "test-qemu.sh", OS / "branding.sh"]
+    scripts = [OS / "build.sh", OS / "test-qemu.sh", OS / "branding.sh", OS / "rpi-firmware.sh",
+               OS / "live/files/usr/libexec/ambar-live-setup"]
     for s in scripts:
         subprocess.run(["bash", "-n", str(s)], check=True)
     if shutil.which("shellcheck"):

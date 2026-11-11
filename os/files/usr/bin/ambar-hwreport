@@ -1,0 +1,195 @@
+#!/usr/bin/python3
+"""Collects what's needed for the Ambar OS hardware compatibility list.
+
+    ambar-hwreport            print a report (Markdown) to paste into a
+                              "Hardware report" issue on GitHub
+    ambar-hwreport --json     the same data as JSON
+
+Privacy: reads only model names, drivers and capabilities. It never reads
+serial numbers, MAC addresses, UUIDs, user names, host names or files in
+your home folder, and it sends nothing anywhere: you decide what to paste.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+from pathlib import Path
+
+ROOT = Path(os.environ.get("AMBAR_HWREPORT_ROOT", "/"))  # tests point this at a fake tree
+
+
+def read(rel: str) -> str:
+    try:
+        return (ROOT / rel.lstrip("/")).read_text(errors="replace").strip()
+    except OSError:
+        return ""
+
+
+def os_release() -> dict:
+    out = {}
+    for line in read("/etc/os-release").splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            out[k] = v.strip().strip('"')
+    return out
+
+
+def machine() -> str:
+    vendor = read("/sys/class/dmi/id/sys_vendor")
+    product = read("/sys/class/dmi/id/product_name")
+    version = read("/sys/class/dmi/id/product_version")
+    if not product:  # ARM boards: device tree model, e.g. "Raspberry Pi 4 Model B Rev 1.4"
+        return read("/proc/device-tree/model").rstrip("\x00") or read("/sys/firmware/devicetree/base/model").rstrip("\x00") or "unknown"
+    junk = {"", "To Be Filled By O.E.M.", "System Product Name", "Default string", "None"}
+    parts = [p for p in (vendor, product, version) if p not in junk]
+    return " ".join(dict.fromkeys(parts)) or "unknown"
+
+
+def cpu() -> str:
+    info = read("/proc/cpuinfo")
+    for key in ("model name", "Model", "Hardware"):
+        m = re.search(rf"^{key}\s*:\s*(.+)$", info, re.M)
+        if m:
+            return m.group(1).strip()
+    return os.uname().machine
+
+
+def memory_gb() -> float:
+    m = re.search(r"^MemTotal:\s*(\d+)\s*kB", read("/proc/meminfo"), re.M)
+    return round(int(m.group(1)) / 1024 / 1024, 1) if m else 0.0
+
+
+def _driver(dev: Path) -> str:
+    link = dev / "driver"
+    return os.path.basename(os.readlink(link)) if link.is_symlink() else "none"
+
+
+def pci_devices(classes: tuple[str, ...]) -> list[dict]:
+    out = []
+    base = ROOT / "sys/bus/pci/devices"
+    for dev in sorted(base.glob("*")) if base.exists() else []:
+        cls = (dev / "class").read_text().strip() if (dev / "class").exists() else ""
+        if not cls.startswith(classes):
+            continue
+        ven = (dev / "vendor").read_text().strip() if (dev / "vendor").exists() else ""
+        did = (dev / "device").read_text().strip() if (dev / "device").exists() else ""
+        out.append({"id": f"{ven[2:]}:{did[2:]}", "driver": _driver(dev), "class": cls})
+    return out
+
+
+def gpus() -> list[dict]:
+    return pci_devices(("0x0300", "0x0302", "0x0380"))
+
+
+def network() -> list[dict]:
+    """Network interfaces with their driver and kind. No addresses."""
+    out = []
+    base = ROOT / "sys/class/net"
+    for nic in sorted(base.glob("*")) if base.exists() else []:
+        if nic.name == "lo" or not (nic / "device").exists():
+            continue
+        kind = "wifi" if (nic / "wireless").exists() or (nic / "phy80211").exists() else "ethernet"
+        out.append({"kind": kind, "driver": _driver(nic / "device")})
+    return out
+
+
+def audio() -> list[str]:
+    cards = read("/proc/asound/cards")
+    return [m.group(1).strip() for m in re.finditer(r"^\s*\d+\s+\[[^\]]*\]:\s*(.+)$", cards, re.M)]
+
+
+def sleep_states() -> list[str]:
+    return read("/sys/power/state").split()
+
+
+def secure_boot() -> str:
+    efi = ROOT / "sys/firmware/efi"
+    if not efi.exists():
+        return "n/a"
+    for f in sorted((efi / "efivars").glob("SecureBoot-*")) if (efi / "efivars").exists() else []:
+        return "enabled" if f.read_bytes()[-1:] == b"\x01" else "disabled"
+    return "unknown"
+
+
+def boot_mode() -> str:
+    return "UEFI" if (ROOT / "sys/firmware/efi").exists() else "BIOS"
+
+
+def session() -> str:
+    return os.environ.get("XDG_SESSION_TYPE", "unknown")
+
+
+def ambard_ok() -> str:
+    if str(ROOT) != "/":
+        return "not checked"
+    try:
+        r = subprocess.run(["ambar", "service", "status"], capture_output=True, text=True, timeout=10)
+        return "running" if r.returncode == 0 else "not running"
+    except (OSError, subprocess.TimeoutExpired):
+        return "ambar not installed"
+
+
+def collect() -> dict:
+    rel = os_release()
+    return {
+        "os": rel.get("PRETTY_NAME", "unknown"),
+        "kernel": read("/proc/sys/kernel/osrelease") or os.uname().release,
+        "arch": os.uname().machine if str(ROOT) == "/" else read("/arch") or "unknown",
+        "machine": machine(),
+        "cpu": cpu(),
+        "memory_gb": memory_gb(),
+        "boot": boot_mode(),
+        "secure_boot": secure_boot(),
+        "gpu": gpus(),
+        "network": network(),
+        "audio": audio(),
+        "sleep": sleep_states(),
+        "session": session(),
+        "ambard": ambard_ok(),
+    }
+
+
+def markdown(r: dict) -> str:
+    gpu = ", ".join(f"`{g['id']}` ({g['driver']})" for g in r["gpu"]) or "none found"
+    net = ", ".join(f"{n['kind']} ({n['driver']})" for n in r["network"]) or "none found"
+    wifi = next((n["driver"] for n in r["network"] if n["kind"] == "wifi"), "")
+    lines = [
+        f"### {r['machine']}",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| OS | {r['os']} |",
+        f"| Kernel | {r['kernel']} ({r['arch']}) |",
+        f"| CPU | {r['cpu']} |",
+        f"| Memory | {r['memory_gb']} GB |",
+        f"| Boot | {r['boot']}, Secure Boot {r['secure_boot']} |",
+        f"| Graphics | {gpu} |",
+        f"| Network | {net} |",
+        f"| Audio | {', '.join(r['audio']) or 'none found'} |",
+        f"| Sleep states | {' '.join(r['sleep']) or 'none'} |",
+        f"| Session | {r['session']} |",
+        f"| Ambar service | {r['ambard']} |",
+        "",
+        "Row for docs/hardware.md (fill in the ? after testing):",
+        "",
+        f"| {r['machine']} | {r['arch']} | ? boots | {('? ' + wifi) if wifi else 'no Wi-Fi'} | "
+        f"? {r['gpu'][0]['driver'] if r['gpu'] else 'graphics'} | {'? suspend' if 'mem' in r['sleep'] else 'no suspend'} | "
+        f"{r['os']} |",
+    ]
+    return "\n".join(lines)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-hwreport", description=__doc__.splitlines()[0])
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    r = collect()
+    print(json.dumps(r, indent=2) if a.json else markdown(r))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/alexbieber/AmbarOS/discussions
+    about: Ask questions and share ideas in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/alexbieber/AmbarOS/security/advisories/new
+    about: Report privately. Please don't open a public issue.
+  - name: Documentation
+    url: https://alexbieber.github.io/AmbarOS/
+    about: Install guide, troubleshooting and FAQ.

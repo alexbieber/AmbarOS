@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest something Ambar OS should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task or problem, not just the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: textarea
+    id: safety
+    attributes:
+      label: Access and safety
+      description: If this means automations, agents or AI can do something new, what access would it need, and how would the user approve it?

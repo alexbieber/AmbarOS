@@ -41,8 +41,9 @@ LABEL org.opencontainers.image.title="Ambar OS" \
       org.opencontainers.image.licenses="Apache-2.0" \
       containers.bootc=1
 
-# Runtime dependencies of the Automation Center.
-RUN dnf -y install --setopt=install_weak_deps=False python3-pyside6 python3-jeepney && dnf clean all
+# Runtime dependencies of the Automation Center, and plasma-setup, which creates
+# the first account on first boot (installs from the live USB and Pi images).
+RUN dnf -y install --setopt=install_weak_deps=False python3-pyside6 python3-jeepney plasma-setup && dnf clean all
 
 # Ambar software.
 COPY --from=build /out/usr /usr
@@ -73,7 +74,7 @@ RUN /tmp/branding.sh "$(realpath /usr/lib/os-release)" "${FEDORA_VERSION}" && rm
 # Enable ambard for every user session (systemd user preset), and sanity-check.
 RUN systemctl --global preset ambard.service \
     && test -x /usr/bin/ambard && /usr/bin/ambar --version \
-    && test -x /usr/bin/ambar-krunner && test -x /usr/bin/ambar-center \
+    && test -x /usr/bin/ambar-krunner && test -x /usr/bin/ambar-center && /usr/bin/ambar-hwreport --json >/dev/null \
     && python3 -c "import ambar_center, ambar_center.krunner, ambar_sdk, jeepney, PySide6"
 
 RUN bootc container lint

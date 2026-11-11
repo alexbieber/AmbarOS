@@ -1,0 +1,42 @@
+name: Hardware report
+description: Tell us how Ambar OS runs on your computer (works or not, both help).
+title: "Hardware: "
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Run `ambar-hwreport` in a terminal on the machine and paste the output below. It contains no serial numbers or addresses.
+  - type: textarea
+    id: report
+    attributes:
+      label: ambar-hwreport output
+      render: markdown
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How did you run it?
+      options: [Live USB, Installed, Raspberry Pi image]
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works?
+      description: Tick what you tested and saw working. Leave the rest unticked and explain below.
+      options:
+        - label: Starts to the desktop
+        - label: Wi-Fi connects
+        - label: Screen at full resolution, brightness keys work
+        - label: Sound plays
+        - label: Sleep and wake up (lid close/open)
+        - label: Touchpad, keyboard backlight and function keys
+        - label: Secure Boot on
+        - label: Automation Center and Alt+Space search work
+  - type: textarea
+    id: notes
+    attributes:
+      label: Problems and notes
+      description: What didn't work, and anything you had to change (for example "safe graphics", BIOS settings).

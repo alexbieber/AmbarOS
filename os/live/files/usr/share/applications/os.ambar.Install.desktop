@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install Ambar OS
+Comment=Install Ambar OS on this computer
+Exec=ambar-install
+Icon=ambar-logo
+Terminal=false
+Categories=System;

@@ -1,0 +1,2 @@
+# Live medium only: the live user has no password, so sudo must not ask for one.
+liveuser ALL=(ALL) NOPASSWD: ALL

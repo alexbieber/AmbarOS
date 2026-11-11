@@ -12,6 +12,7 @@ import sys
 import time
 
 USER, PASSWORD = "ambar", "ambar"  # created by os/config/qcow2.toml (test images only)
+LIVE_USER = "liveuser"  # live ISO: passwordless, created by ambar-live-setup.service
 
 SCRIPT = r"""
 echo __BEGIN__
@@ -41,11 +42,13 @@ echo __END__
 # Phase 2: log the test user into Plasma and check the desktop integration.
 DESKTOP_SCRIPT = r"""
 echo __DBEGIN__
-echo ambar | sudo -S sh -c 'mkdir -p /etc/sddm.conf.d && printf "[Autologin]\nUser=ambar\nSession=plasma\n" > /etc/sddm.conf.d/zz-smoke.conf && systemctl restart sddm' 2>/dev/null
-for i in $(seq 120); do pgrep -u ambar -x plasmashell >/dev/null && break; sleep 2; done
-pgrep -u ambar -x plasmashell >/dev/null && echo PLASMA_OK
+if ! pgrep -u {user} -x plasmashell >/dev/null; then
+  echo {password} | sudo -S sh -c 'mkdir -p /etc/sddm.conf.d && printf "[Autologin]\nUser={user}\nSession=plasma\n" > /etc/sddm.conf.d/zz-smoke.conf && systemctl restart sddm' 2>/dev/null
+fi
+for i in $(seq 120); do pgrep -u {user} -x plasmashell >/dev/null && break; sleep 2; done
+pgrep -u {user} -x plasmashell >/dev/null && echo PLASMA_OK
 sleep 20
-pgrep -u ambar -f "ambar-center --welcome" >/dev/null && echo WELCOME_OK
+pgrep -u {user} -f "ambar-center --welcome" >/dev/null && echo WELCOME_OK
 busctl --user call os.ambar.KRunner /runner org.kde.krunner1 Match s "automate tidy my desktop" 2>&1 | head -c 400; echo
 plasma-apply-lookandfeel --list 2>/dev/null | grep os.ambar
 echo __DEND__
@@ -122,12 +125,14 @@ def screendump(monitor, out):
     m.close()
 
 
-def run(path, log=None, boot_timeout=900, monitor=None, screenshot=None, desktop=True):
+def run(path, log=None, boot_timeout=900, monitor=None, screenshot=None, desktop=True,
+        user=USER, password=PASSWORD):
     s = Serial(path, log)
     s.read_until(r"login:\s*$", boot_timeout)
-    s.send(USER + "\n")
-    s.read_until(r"Password:\s*$", 60)
-    s.send(PASSWORD + "\n")
+    s.send(user + "\n")
+    if password:  # a passwordless account (live ISO) goes straight to the shell
+        s.read_until(r"Password:\s*$", 60)
+        s.send(password + "\n")
     s.read_until(r"[$#]\s*$", 120)
     s.send(SCRIPT.strip() + "\n")
     out = s.read_until(r"^__END__\s*$", 300)
@@ -136,7 +141,8 @@ def run(path, log=None, boot_timeout=900, monitor=None, screenshot=None, desktop
     print(out)
     checks = list(EXPECT)
     if desktop:
-        s.send(DESKTOP_SCRIPT.strip() + "\n")
+        script = DESKTOP_SCRIPT.replace("{user}", user).replace("{password}", password or "x")
+        s.send(script.strip() + "\n")
         dout = s.read_until(r"^__DEND__\s*$", 600)
         dout = dout[dout.find("__DBEGIN__"):]
         print(dout)
@@ -160,5 +166,11 @@ if __name__ == "__main__":
     ap.add_argument("--monitor", help="QEMU monitor socket (for the desktop screenshot)")
     ap.add_argument("--screenshot", help="where to save the desktop screenshot (PNG)")
     ap.add_argument("--no-desktop", action="store_true", help="skip the graphical-session checks")
+    ap.add_argument("--live", action="store_true", help="live ISO: log in as the passwordless live user")
+    ap.add_argument("--user", help="account to log in as (default: the test user)")
+    ap.add_argument("--password", help="its password ('' for none)")
     a = ap.parse_args()
-    sys.exit(run(a.socket, a.log, a.boot_timeout, a.monitor, a.screenshot, not a.no_desktop))
+    user = a.user or (LIVE_USER if a.live else USER)
+    password = a.password if a.password is not None else ("" if a.live else PASSWORD)
+    sys.exit(run(a.socket, a.log, a.boot_timeout, a.monitor, a.screenshot, not a.no_desktop,
+                 user, password))

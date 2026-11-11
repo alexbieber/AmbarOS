@@ -1,0 +1,75 @@
+site_name: Ambar OS
+site_description: An AI-native Linux desktop — designed for humans, built for AI, open to everyone.
+site_url: https://alexbieber.github.io/AmbarOS/
+repo_url: https://github.com/alexbieber/AmbarOS
+repo_name: alexbieber/AmbarOS
+edit_uri: edit/main/docs/
+copyright: Ambar OS · Apache-2.0 · Built on Fedora, not affiliated with the Fedora Project
+
+theme:
+  name: material
+  logo: images/brand/ambar-mark.svg
+  favicon: images/brand/ambar-icon.svg
+  font: false            # system fonts: no requests to Google Fonts
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - stylesheets/ambar.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+exclude_docs: |
+  MASTER_PLAN.md
+
+nav:
+  - Home: index.md
+  - Get started:
+      - Try it from a USB stick: live-usb.md
+      - Install: install.md
+      - First steps: first-steps.md
+  - Use it:
+      - Workflow format: workflow-format.md
+      - Background service: service.md
+      - Troubleshooting: troubleshooting.md
+      - FAQ: faq.md
+  - Hardware: hardware.md
+  - Build on Ambar:
+      - Developer guide: developer-guide.md
+      - Architecture: architecture.md
+      - OS image: os-image.md
+  - Project:
+      - Status: STATUS.md
+      - Community: community.md

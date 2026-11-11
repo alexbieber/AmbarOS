@@ -1,13 +1,16 @@
 name: OS image
 
-# Builds the Ambar OS bootable container, lints it, builds a qcow2 disk with
-# bootc-image-builder and boots it in QEMU/KVM with the serial smoke test.
-# Pushes the image to GHCR on main.
+# For x86_64 and ARM64, each on its own native runner:
+#   1. build the Ambar OS bootable container and a qcow2 disk
+#   2. boot the disk in QEMU and run the serial smoke test
+#   3. build the live ISO; on x86_64, boot it and run the smoke test as liveuser
+#   4. ARM64 only: build the Raspberry Pi 4/400 SD-card image
+# On main, push both architectures and publish one signed multi-arch image.
 
 on:
   push:
     branches: [main]
-    paths: ["os/**", "crates/**", "desktop/**", "sdk/**", "marketplace/**", "Cargo.*"]
+    paths: ["os/**", "crates/**", "desktop/**", "sdk/**", "marketplace/**", "Cargo.*", ".github/workflows/os-image.yml"]
   workflow_dispatch:
 
 permissions:
@@ -19,9 +22,23 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/ambar-os
 
 jobs:
-  image:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
+  build:
+    name: build + boot (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+            smoke: ""
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            qemu: qemu-system-arm qemu-efi-aarch64
+            # Usually no KVM on ARM runners: emulation is slow, so CLI checks only.
+            smoke: "--no-desktop --boot-timeout 3600"
     steps:
       - name: Free disk space
         run: |
@@ -33,41 +50,109 @@ jobs:
         run: sudo podman build --pull=newer -t localhost/ambar-os:latest -f os/Containerfile .
 
       - name: Build qcow2 disk
-        run: PODMAN="sudo podman" os/build.sh qcow2 || { echo "disk build failed"; exit 1; }
+        run: PODMAN="sudo podman" os/build.sh qcow2
 
       - name: Install QEMU and enable KVM
         run: |
-          sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
-          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo apt-get update && sudo apt-get install -y ${{ matrix.qemu }}
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          else
+            echo "no KVM on this runner: QEMU will emulate"
+          fi
           sudo chown -R "$USER" output
 
-      - name: Boot and smoke-test (CLI, service, marketplace, Plasma, KRunner, Welcome)
-        run: SERIAL_LOG=output/serial.log SCREENSHOT=output/desktop.png os/test-qemu.sh output/qcow2/disk.qcow2
+      - name: Boot disk and smoke-test
+        run: SERIAL_LOG=output/serial.log SCREENSHOT=output/desktop.png SMOKE_ARGS="${{ matrix.smoke }}" os/test-qemu.sh output/qcow2/disk.qcow2
+
+      - name: Build live ISO
+        run: |
+          PODMAN="sudo podman" os/build.sh live-iso
+          sudo chown -R "$USER" output
+
+      - name: Boot live ISO and smoke-test (as liveuser)
+        if: matrix.arch == 'amd64'
+        run: SERIAL_LOG=output/live-serial.log SCREENSHOT=output/live-desktop.png os/test-qemu.sh output/live/ambar-os-live-x86_64.iso
+
+      - name: Build Raspberry Pi image
+        if: matrix.arch == 'arm64'
+        run: |
+          PODMAN="sudo podman" os/build.sh rpi
+          sudo chown -R "$USER" output
+          xz -T0 -6 -k output/image/disk.raw
+          mv output/image/disk.raw.xz output/ambar-os-rpi4-aarch64.raw.xz
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: boot-evidence
+          name: boot-evidence-${{ matrix.arch }}
           path: |
             output/serial.log
             output/desktop.png
+            output/live-serial.log
+            output/live-desktop.png
+          if-no-files-found: ignore
 
-      - name: Push to GHCR
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ambar-os-live-${{ matrix.arch }}
+          path: output/live/*.iso
+          retention-days: 14
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        if: success() && matrix.arch == 'arm64'
+        with:
+          name: ambar-os-rpi4
+          path: output/ambar-os-rpi4-aarch64.raw.xz
+          retention-days: 14
+          compression-level: 0
+
+      - name: Push ${{ matrix.arch }} image
         if: github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          sudo podman tag localhost/ambar-os:latest "$IMAGE:latest"
-          sudo podman tag localhost/ambar-os:latest "$IMAGE:${{ github.sha }}"
-          sudo podman push --digestfile digest "$IMAGE:latest"
-          sudo podman push "$IMAGE:${{ github.sha }}"
+          tag="$IMAGE:${{ github.sha }}-${{ matrix.arch }}"
+          sudo podman tag localhost/ambar-os:latest "$tag"
+          mkdir -p digests
+          sudo podman push --digestfile "digests/${{ matrix.arch }}" "$tag"
+          sudo chown -R "$USER" digests
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests/${{ matrix.arch }}
+
+  publish:
+    name: publish multi-arch image
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Create and push manifest list
+        run: |
+          set -eu
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          podman manifest create ambar-os
+          for arch in amd64 arm64; do
+            podman manifest add ambar-os "docker://$IMAGE@$(cat "digests/$arch")"
+          done
+          podman manifest push --all --digestfile digest ambar-os "docker://$IMAGE:${{ github.sha }}"
+          podman manifest push --all ambar-os "docker://$IMAGE:latest"
           echo "DIGEST=$(cat digest)" >> "$GITHUB_ENV"
 
       - uses: sigstore/cosign-installer@v3
-        if: github.ref == 'refs/heads/main'
 
       - name: Sign image (keyless, sigstore)
-        if: github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
-          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign sign --yes --recursive "$IMAGE@$DIGEST"
