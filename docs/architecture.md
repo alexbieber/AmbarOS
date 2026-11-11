@@ -18,7 +18,8 @@
         └─────────────────────────────────────────────────────────────────────────────────┘
    ambar-ai: description → draft TOML → validate/repair → risk review → human consent
    ambar-pkg: signed .ambarpkg → verify → trust by key → consent → register
-   os/: bootc image = Fedora 45 Kinoite + all of the above, atomic updates/rollback
+   os/ubuntu/: Ambar OS = Ubuntu 26.04 + macOS-style Plasma 6 + all of the above (live/installer ISO)
+   os/: experimental atomic edition (Fedora Kinoite, bootc)
 ```
 
 **One rule runs through every layer: nothing gets privileges by being generated, downloaded or proposed.** AI drafts, agent proposals and packages all end up as workflow TOML. That TOML passes the same validation and risk review, and needs the same explicit human grant. At run time, the engine checks every path against that grant.

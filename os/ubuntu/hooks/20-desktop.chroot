@@ -1,0 +1,159 @@
+#!/bin/bash
+# The Ambar desktop as the default for every user: macOS-style layout
+# (menu bar + dock), theme, fonts, icons, shortcuts, login screen.
+set -euo pipefail
+
+# --- system-wide KDE defaults (users can change all of it in System Settings)
+install -d /etc/xdg
+cat > /etc/xdg/kdeglobals <<'CFG'
+[General]
+ColorScheme=AmbarLight
+AccentColor=179,92,5
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=Noto Sans Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[WM]
+activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
+
+[KDE]
+LookAndFeelPackage=os.ambar.desktop
+DefaultLightLookAndFeel=os.ambar.desktop
+DefaultDarkLookAndFeel=os.ambar.desktop.dark
+widgetStyle=Breeze
+
+[Icons]
+Theme=Papirus
+CFG
+cat > /etc/xdg/kwinrc <<'CFG'
+[org.kde.kdecoration2]
+library=org.kde.kwin.aurorae.v2
+theme=__aurorae__svg__Ambar
+ButtonsOnLeft=XIA
+ButtonsOnRight=
+
+[Plugins]
+blurEnabled=true
+contrastEnabled=true
+wobblywindowsEnabled=false
+magiclampEnabled=true
+squashEnabled=false
+
+[Effect-overview]
+BorderActivate=9
+
+[Windows]
+Placement=Centered
+CFG
+cat > /etc/xdg/plasmarc <<'CFG'
+[Theme]
+name=default
+CFG
+cat > /etc/xdg/kcminputrc <<'CFG'
+[Mouse]
+cursorTheme=breeze_cursors
+CFG
+cat > /etc/xdg/kscreenlockerrc <<'CFG'
+[Greeter][Wallpaper][org.kde.image][General]
+Image=/usr/share/wallpapers/Ambar/contents/images/3840x2160.png
+CFG
+cat > /etc/xdg/ksplashrc <<'CFG'
+[KSplash]
+Theme=org.kde.breeze.desktop
+CFG
+# Show the search (Spotlight) on Meta+Space as well as Alt+Space.
+install -d /etc/skel/.config
+cat > /etc/skel/.config/kglobalshortcutsrc <<'CFG'
+[services][org.kde.krunner.desktop]
+_launch=Meta+Space\tAlt+Space\tAlt+F2\tSearch
+CFG
+# Dolphin like Finder: single window, sidebar, previews, folders first.
+cat > /etc/xdg/dolphinrc <<'CFG'
+[General]
+ShowFullPath=false
+ShowStatusBar=true
+RememberOpenedTabs=false
+[PreviewSettings]
+Plugins=appimagethumbnail,audiothumbnail,comicbookthumbnail,cursorthumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,directorythumbnail,fontthumbnail,imagethumbnail,jpegthumbnail,kraorathumbnail,windowsexethumbnail,windowsimagethumbnail,opendocumentthumbnail,svgthumbnail,ffmpegthumbs
+CFG
+
+# --- login screen: Breeze with the Ambar wallpaper
+install -d /etc/sddm.conf.d
+rm -f /etc/sddm.conf.d/10-ambar.conf
+cat > /etc/sddm.conf.d/90-ambar.conf <<'CFG'
+[Theme]
+Current=breeze
+CursorTheme=breeze_cursors
+CFG
+install -d /usr/share/sddm/themes/breeze
+cat > /usr/share/sddm/themes/breeze/theme.conf.user <<'CFG'
+[General]
+background=/usr/share/wallpapers/Ambar/contents/images/3840x2160.png
+type=image
+CFG
+
+# --- Launchpad and menu favourites, and no Kubuntu links on the desktop
+cat > /etc/xdg/kicker-extra-favoritesrc <<'CFG'
+[General]
+Prepend=org.kde.dolphin.desktop;preferred://browser;org.kde.kmail2.desktop;org.kde.korganizer.desktop;libreoffice-startcenter.desktop;org.kde.konsole.desktop;org.kde.discover.desktop;os.ambar.AutomationCenter.desktop;systemsettings.desktop;
+IgnoreDefaults=true
+CFG
+rm -f /etc/skel/Desktop/*.desktop
+# Developer and debugging tools stay installed but out of Launchpad.
+for f in org.kde.drkonqi.coredump.gui org.kde.contactthemeeditor org.kde.contactprintthemeeditor \
+         org.kde.kmail-refresh-settings org.kde.akonadiconsole org.kde.sieveeditor org.kde.pimdataexporter \
+         org.kde.kuserfeedback-console org.kde.kdebugsettings org.kde.kwrite htop vim; do
+  [ -f "/usr/share/applications/$f.desktop" ] && ! grep -q '^NoDisplay=true' "/usr/share/applications/$f.desktop" \
+    && echo "NoDisplay=true" >> "/usr/share/applications/$f.desktop"
+done
+for f in org.kfocus.web.howtos org.kubuntu.web.home; do
+  [ -f "/usr/share/applications/$f.desktop" ] && echo "NoDisplay=true" >> "/usr/share/applications/$f.desktop"
+done
+
+# --- About This Computer
+cat > /etc/xdg/kcm-about-distrorc <<'CFG'
+[General]
+LogoPath=/usr/share/icons/hicolor/scalable/apps/ambar-logo.svg
+Name=Ambar OS
+UseOSReleaseVersion=true
+Website=https://github.com/alexbieber/AmbarOS
+CFG
+install -d /usr/share/kubuntu-default-settings/kf5-settings
+cp /etc/xdg/kcm-about-distrorc /usr/share/kubuntu-default-settings/kf5-settings/kcm-about-distrorc
+
+# --- Discover is the Ambar Store
+for f in /usr/share/applications/org.kde.discover.desktop; do
+  [ -f "$f" ] && sed -i -E 's/^Name=.*/Name=Ambar Store/; s/^GenericName=.*/GenericName=App Store/' "$f"
+done
+
+# --- Flathub, so the store has the full app catalogue
+flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null \
+  || echo "flathub: not reachable at build time; added on first boot"
+install -d /usr/lib/systemd/system
+cat > /usr/lib/systemd/system/ambar-flathub.service <<'CFG'
+[Unit]
+Description=Add Flathub to the Ambar Store
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/flatpak/repo/flathub.trustedkeys.gpg
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+CFG
+systemctl enable ambar-flathub.service
+
+# --- sanity: every Ambar widget the layout uses is installed
+for w in os.ambar.menu os.ambar.appname os.ambar.controlcenter; do
+  test -f "/usr/share/plasma/plasmoids/$w/metadata.json"
+done
+test -x /usr/bin/ambar-control-center
+test -f /usr/share/aurorae/themes/Ambar/decoration.svg
+test -f /usr/share/plasma/look-and-feel/os.ambar.desktop/contents/layouts/org.kde.plasma.desktop-layout.js

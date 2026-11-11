@@ -1,0 +1,12 @@
+# Never installed (apt pin priority -1).
+# Snap-only shims: installing them at build time tries to reach the Snap Store.
+firefox
+thunderbird
+chromium-browser
+# Games that come with Kubuntu's selection.
+kmahjongg
+kmines
+kpat
+ksudoku
+# KDE welcome app: Ambar has its own first-run Welcome.
+plasma-welcome

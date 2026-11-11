@@ -1,0 +1,40 @@
+---
+componentName:  ambar
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 1024px,640px
+windowPlacement: center
+sidebar: widget
+navigation: widget
+
+strings:
+    productName:         "Ambar OS"
+    shortProductName:    "Ambar"
+    version:             "0.2"
+    shortVersion:        "0.2"
+    versionedName:       "Ambar OS 0.2"
+    shortVersionedName:  "Ambar 0.2"
+    bootloaderEntryName: "Ambar OS"
+    productUrl:          "https://github.com/alexbieber/AmbarOS"
+    supportUrl:          "https://alexbieber.github.io/AmbarOS/troubleshooting/"
+    knownIssuesUrl:      "https://github.com/alexbieber/AmbarOS/issues"
+    releaseNotesUrl:     "https://github.com/alexbieber/AmbarOS/blob/main/docs/STATUS.md"
+    donateUrl:           ""
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "icon.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+slideshowAPI:            2
+
+style:
+   SidebarBackground:        "#15120F"
+   SidebarText:              "#F7F4EF"
+   SidebarTextCurrent:       "#1A1612"
+   SidebarBackgroundCurrent: "#F2A43A"
+
+uploadServer :
+    type :    "none"

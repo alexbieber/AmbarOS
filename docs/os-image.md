@@ -1,4 +1,68 @@
-# Ambar OS image
+# OS images
+
+There are two editions:
+
+| Edition | Base | Status |
+|---|---|---|
+| **Ambar OS** (main) | Ubuntu 26.04 LTS + KDE Plasma 6, macOS-style desktop, live/installer ISO | built and booted in QEMU here, and in CI |
+| Atomic edition (experimental) | Fedora 45 Kinoite + bootc, image updates with rollback, ARM64, Raspberry Pi | recipe written, built only in CI |
+
+## Ambar OS ISO (main edition)
+
+```
+os/ubuntu/
+  build.sh            debootstrap → packages → Ambar layer → squashfs → UEFI+BIOS ISO
+  packages.txt        Kubuntu's full desktop + Ambar's additions (one per line)
+  exclude.txt         kept out: Snap-only shims (firefox/thunderbird), games, KDE's welcome app
+  hooks/*.chroot      run inside the image: identity, desktop defaults, apps, boot animation, installer, initramfs
+  overlay/            files copied into the image: Calamares branding, Plymouth theme
+  iso/                GRUB menu and background
+  test-qemu.sh        boots the ISO in QEMU (UEFI) and runs smoke.py over the serial console
+  smoke.py            checks: identity, Plasma, menu bar widgets, Dock, Launchpad, apps, store, installer, ambard
+  desktop-shots.sh    runs the built desktop on a virtual screen to look at it and take screenshots
+```
+
+### What's in it
+
+- **Desktop:** KDE Plasma 6.6 laid out like macOS:
+    - a menu bar with the Ambar menu, the app's name and its menus, status icons, Control Center and the clock
+    - a floating Dock with Launchpad and Trash
+    - red, yellow and green window buttons on the left
+    - Spotlight-style search on Meta+Space, and Mission Control (Overview)
+    - light and dark themes covering colours, Papirus icons, the Inter font, wallpaper, login screen and boot animation
+- **Apps (all of Kubuntu's selection):**
+    - Files (Dolphin), Terminal (Konsole), Kate, Okular, Gwenview, Elisa, Haruna, Spectacle, Ark, KCalc
+    - LibreOffice, KMail and KOrganizer, KDE Connect
+    - System Monitor, Partition Manager, printing and scanning
+    - the browser: Firefox from Mozilla's repository when the build can reach it, otherwise Falkon
+- **Install anything:**
+    - the Ambar Store (Discover), with apt, Flathub and Snap
+    - `.deb` files open in the Store
+    - Wine for `.exe` and `.msi` files
+    - distrobox and podman
+    - Driver Manager, and media codecs
+- **System:**
+    - the Calamares installer, branded Ambar: erase disk, install alongside another OS, manual partitioning, or disk encryption
+    - Timeshift snapshots, the ufw firewall with a settings page, fwupd firmware updates
+    - fcitx5 for Indian and other input methods
+- **Ambar:**
+    - `ambard`, enabled for every user
+    - the Automation Center, KRunner integration, the first-run Welcome
+    - the marketplace and `ambar-hwreport`
+
+### Build and test
+
+```sh
+sudo os/ubuntu/build.sh all          # rootfs (≈12 GB, ≈3 GB download) → output/ubuntu/ambar-os-0.2-amd64.iso
+os/ubuntu/test-qemu.sh output/ubuntu/ambar-os-0.2-amd64.iso
+```
+
+Steps can be run on their own: `rootfs` (resumable), `ambar` (re-applies the Ambar layer in a few minutes), `iso`. CI runs the whole thing in `.github/workflows/os-ubuntu.yml` with `BROWSER=firefox`, boots the ISO under KVM and keeps the ISO and boot evidence as artifacts.
+
+## Atomic edition (experimental)
+
+The sections below describe the Fedora/bootc recipe in `os/`.
+
 
 Ambar OS is a **bootable container** ([bootc](https://bootc-dev.github.io/bootc/)) built on Fedora's KDE atomic desktop image (`quay.io/fedora-ostree-desktops/kinoite:45`). The whole OS is one image: it's built like a container and installed like a normal OS. Updates and rollbacks are atomic.
 

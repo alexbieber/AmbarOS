@@ -6,9 +6,9 @@ Find your problem below. Each fix starts with the quickest check. If nothing her
 
 ### The USB stick won't boot
 
-- **Written wrong.** Check the stick was *written* as an image (Fedora Media Writer, balenaEtcher or `dd`), not copied as a file.
+- **Written wrong.** Check the stick was *written* as an image (balenaEtcher, Fedora Media Writer, Rufus in DD mode, or `dd`), not copied as a file.
 - **Boot menu.** Choose the entry that starts with **UEFI** in the boot menu.
-- **Secure Boot.** Ambar boots through Fedora's signed shim. If the firmware still says *security violation*, turn Secure Boot off in the firmware settings, start Ambar, and report your model.
+- **Secure Boot.** Ambar boots through Ubuntu's signed shim. If the firmware still says *security violation*, turn Secure Boot off in the firmware settings, start Ambar, and report your model.
 - **USB port.** Some machines only boot from USB 2 ports or from the left-hand ports. Try another port.
 
 ### Black or garbled screen after the boot menu
@@ -19,14 +19,9 @@ On an installed system, press **e** at the boot menu, add `nomodeset` to the end
 
 ### Something broke after an update
 
-Every update keeps the previous version. Restart, and in the boot menu choose the **second** entry. That's the version you had before. To make that permanent:
+Open **Timeshift** (Launchpad → System), pick the snapshot from before the update, and choose **Restore**. If the desktop won't start at all, boot the USB stick, open Timeshift there, and restore your installed system from it. Your files in `/home` aren't touched by a system restore.
 
-```sh
-sudo bootc rollback
-sudo reboot
-```
-
-`sudo bootc status` shows which versions are installed. Your files and automations aren't affected by updates or rollbacks.
+Timeshift needs to be set up once: open it, choose RSYNC, and pick a schedule.
 
 ## Automations
 
@@ -91,30 +86,21 @@ It closes for good when you finish the last step. To open it again later, use th
 
 ## Installing
 
-### The installer doesn't show my disk
+### The installer won't install next to Windows
 
-Run `ambar-install --list`. It lists every disk it hid and why:
-
-- it's the live USB itself
-- it's read-only
-- it's smaller than 32 GB
-- it's mounted
-
-Unmount a mounted disk (for example in Dolphin) and try again.
+- **BitLocker:** turn off BitLocker in Windows first, or the installer can't resize the Windows partition.
+- **Fast Startup:** turn off Windows Fast Startup (Control Panel → Power Options).
+- **Free space:** give Ambar OS at least 30 GB. Shrink the Windows partition in Windows' Disk Management, then choose **Install alongside** or **Manual**.
 
 ### The install stopped with an error
 
-The installer downloads the OS image. Check the network, then run it again from a terminal to see the full output:
-
-```sh
-ambar-install --disk /dev/<disk>
-```
+The installer keeps a log at `/root/.cache/calamares/session.log` while it runs. Copy it before you restart, and attach it to a [bug report](community.md#get-help).
 
 ## Collect information for a bug report
 
 ```sh
 ambar --version
-sudo bootc status
+cat /etc/os-release
 ambar service status
 ambar history --steps | head -40
 journalctl --user -u ambard -n 100 --no-pager

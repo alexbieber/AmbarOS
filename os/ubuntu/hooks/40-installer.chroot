@@ -1,0 +1,11 @@
+#!/bin/bash
+# Calamares: Ambar branding, and the installer launcher named for Ambar.
+set -euo pipefail
+S=/etc/calamares/settings.conf
+[ -f "$S" ] || { echo "calamares settings.conf missing" >&2; exit 1; }
+sed -i -E 's/^branding:.*/branding: ambar/' "$S"
+grep -q '^branding: ambar' "$S"
+for f in /usr/share/applications/*calamares*.desktop /usr/share/applications/*install*.desktop; do
+  [ -f "$f" ] || continue
+  sed -i -E 's/^Name(\[[^]]*\])?=.*/Name\1=Install Ambar OS/; s/^Icon=.*/Icon=ambar-logo/' "$f"
+done

@@ -1,8 +1,47 @@
 # First steps
 
-Ten minutes from first login to your first automation.
+A tour of the desktop, how to install apps, and your first automation.
 
-## 1. The Welcome setup
+## Your desktop
+
+![The Ambar OS desktop](images/os/desktop.jpg)
+
+| macOS | Ambar OS | How |
+|---|---|---|
+| Apple menu | **Ambar menu**: the logo at the top left | About This Computer, Settings, Store, Force Quit, Sleep, Restart, Shut Down, Lock |
+| Menu bar | **Menu bar**: the name and menus of the app in front | Apps put their File, Edit, View… menus here |
+| Control Center | **Control Center**: the toggle icon next to the clock | Wi-Fi, Bluetooth, Airplane Mode, Do Not Disturb, Dark Mode, Night Light, display brightness, sound |
+| Spotlight | **Search** | **Meta+Space** (or Alt+Space): apps, files, settings, calculations, automations |
+| Dock | **Dock** at the bottom | Click to open; running apps have a mark; right-click to pin |
+| Launchpad | **Launchpad**: the grid icon at the left of the Dock | All apps A–Z, favourites, categories, search |
+| Mission Control | **Overview** | **Meta+W**, or a four-finger swipe up on a touchpad |
+| Finder | **Files** (Dolphin) | Tabs, split view, previews, network places |
+| Window buttons | Red, yellow, green circles on the left | Close, minimise, maximise |
+| Force Quit | Ambar menu → Force Quit, or **Ctrl+Alt+Esc** | Click the window to close |
+| Screenshot | **Print Screen**, or Control Center → Screenshot | Area, window or full screen |
+| Lock screen | **Meta+L** | |
+
+Light or dark: Control Center → **Dark Mode** switches the whole desktop, including colours, icons, window frames and the wallpaper.
+
+## Install apps
+
+Ambar OS installs software in every common Linux format, so most apps you'd want are a click away:
+
+| What | How |
+|---|---|
+| **Ambar Store** (Dock) | Search, then click Install. Covers Ubuntu's apps, Flathub and Snap. |
+| A `.deb` from a website (Chrome, VS Code, Zoom, Discord, Steam…) | Download it and double-click. The Store installs it and keeps it updated if the app adds its own repository. |
+| Flatpak | Flathub is built in: `flatpak install flathub <app>`, or use the Store. |
+| Snap | `sudo snap install <app>`, or use the Store. |
+| AppImage | Download, then right-click → Properties → Permissions → *Is executable*, and double-click. |
+| Windows programs | `.exe` and `.msi` files open with **Wine** (installed). For games and tricky apps, install **Bottles** from the Store. |
+| Terminal | `sudo apt install <package>`; `distrobox` for apps from other Linux distributions. |
+
+Drivers: **Driver Manager** (in Launchpad) offers NVIDIA and other vendor drivers when your hardware needs them.
+
+## Ambar automation
+
+### 1. The Welcome setup
 
 The first time you log in, **Welcome to Ambar** opens. It has four steps:
 
@@ -13,7 +52,7 @@ The first time you log in, **Welcome to Ambar** opens. It has four steps:
 
 You can come back to it from the **Setup** page in the Automation Center.
 
-## 2. The Automation Center
+### 2. The Automation Center
 
 Open **Automation Center** from the launcher. Its pages:
 
@@ -26,9 +65,9 @@ Open **Automation Center** from the launcher. Its pages:
 | Activity | Every run, step by step |
 | Setup | The Welcome steps again |
 
-## 3. Make your first automation
+### 3. Make your first automation
 
-### With AI
+#### With AI
 
 On **Overview**, type what you want, for example:
 
@@ -42,7 +81,7 @@ Then choose **Create draft**. Before anything is added, you see three things:
 
 Approve it, and it's added and switched on.
 
-### By hand
+#### By hand
 
 Save this as `tidy-screenshots.toml`:
 
@@ -75,9 +114,9 @@ ambar workflow add tidy-screenshots.toml --enable
 
 All triggers, conditions and actions are in the [workflow format](workflow-format.md).
 
-## 4. Search with KRunner
+### 4. Search for automations
 
-Press **Alt+Space** and type:
+Press **Meta+Space** (or Alt+Space) and type:
 
 | Type | What happens |
 |---|---|
@@ -85,7 +124,7 @@ Press **Alt+Space** and type:
 | `automate` followed by a description | opens a new AI draft |
 | `approvals` | shows how many actions are waiting for your decision |
 
-## 5. Approvals
+### 5. Approvals
 
 Moving files to the trash and overwriting files are sensitive. Unless you allowed them when you granted the automation its access, they need your decision each time. When one comes up, a notification appears. You can answer it in any of three places:
 
@@ -101,7 +140,7 @@ ambar approval deny <id>
 
 If nobody answers within 5 minutes, the action is **denied**.
 
-## 6. See what happened
+### 6. See what happened
 
 ```sh
 ambar service status          # is the service healthy?

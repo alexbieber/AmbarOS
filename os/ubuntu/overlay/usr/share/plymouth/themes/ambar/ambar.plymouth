@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Ambar OS
+Description=Ambar mark with a progress bar
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ambar
+ScriptFile=/usr/share/plymouth/themes/ambar/ambar.script

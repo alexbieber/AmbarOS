@@ -1,0 +1,32 @@
+#!/bin/bash
+# OS identity: "Ambar OS", based on Ubuntu (ID_LIKE keeps Ubuntu tooling working).
+set -euo pipefail
+. /usr/lib/os-release
+dpkg-divert --quiet --local --rename --add /usr/lib/os-release
+cat > /usr/lib/os-release <<OS
+PRETTY_NAME="Ambar OS ${AMBAR_VERSION}"
+NAME="Ambar OS"
+VERSION_ID="${AMBAR_VERSION}"
+VERSION="${AMBAR_VERSION} (based on Ubuntu ${VERSION_ID} LTS)"
+VERSION_CODENAME=${VERSION_CODENAME}
+ID=ambar
+ID_LIKE="ubuntu debian"
+UBUNTU_CODENAME=${UBUNTU_CODENAME:-$VERSION_CODENAME}
+HOME_URL="https://github.com/alexbieber/AmbarOS"
+DOCUMENTATION_URL="https://alexbieber.github.io/AmbarOS/"
+SUPPORT_URL="https://alexbieber.github.io/AmbarOS/troubleshooting/"
+BUG_REPORT_URL="https://github.com/alexbieber/AmbarOS/issues"
+LOGO=ambar-logo
+OS
+ln -sf ../usr/lib/os-release /etc/os-release
+printf 'Ambar OS %s \\n \\l\n\n' "$AMBAR_VERSION" > /etc/issue
+echo "Ambar OS $AMBAR_VERSION" > /etc/issue.net
+# Live session user (casper).
+cat > /etc/casper.conf <<CC
+export USERNAME="ambar"
+export USERFULLNAME="Ambar Live"
+export HOST="ambar-os"
+export BUILD_SYSTEM="Ubuntu"
+export FLAVOUR="Ambar"
+CC
+echo ambar-os > /etc/hostname

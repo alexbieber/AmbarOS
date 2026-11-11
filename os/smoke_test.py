@@ -72,6 +72,15 @@ EXPECT = [
 ]
 
 
+ESCAPES = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[=>]|\r")
+
+
+def clean(text):
+    """Strips terminal control sequences (colours, titles, and the OSC 3008
+    context markers newer systemd shells print), so output lines can be matched."""
+    return ESCAPES.sub("", text)
+
+
 class Serial:
     def __init__(self, path, log):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -104,7 +113,7 @@ class Serial:
             if self.log:
                 self.log.write(chunk)
                 self.log.flush()
-            self.buf += chunk.replace("\r", "")
+            self.buf += clean(chunk)
         raise TimeoutError(f"timed out waiting for {pattern!r}; last output:\n{self.buf[-800:]}")
 
     def send(self, text):

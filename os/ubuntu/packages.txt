@@ -1,0 +1,78 @@
+# Ambar OS package set (Ubuntu 26.04 "resolute"). One package per line; # comments.
+# The base is Kubuntu's own tested desktop selection; Ambar adds and removes
+# on top of it. See exclude.txt for what is kept out.
+
+# --- live system, kernel, firmware, boot
+linux-generic
+linux-firmware
+casper
+grub-efi-amd64-signed
+shim-signed
+grub-pc-bin
+plymouth
+plymouth-label
+os-prober
+
+# --- the complete KDE desktop, as Kubuntu ships it (with its recommends)
+kubuntu-desktop
+
+# --- installer
+calamares
+calamares-settings-kubuntu
+
+# --- macOS-style shell pieces
+plasma-widgets-addons
+kdeplasma-addons-data
+appmenu-gtk3-module
+kwin-addons
+kwin-style-aurorae
+fonts-inter
+fonts-noto-core
+fonts-noto-color-emoji
+papirus-icon-theme
+
+# --- apps beyond Kubuntu's set
+falkon
+kamoso
+skanpage
+kontact
+korganizer
+kmail
+kcolorchooser
+filelight
+kfind
+sweeper
+
+# --- install anything
+flatpak
+plasma-discover-backend-flatpak
+kde-config-flatpak
+plasma-discover-backend-fwupd
+snapd
+distrobox
+podman
+wine
+wine64
+libavcodec-extra
+gstreamer1.0-plugins-ugly
+gstreamer1.0-plugins-bad
+gstreamer1.0-libav
+
+# --- system tools
+timeshift
+ufw
+plasma-firewall
+fwupd
+ubuntu-drivers-common
+software-properties-qt
+fcitx5
+fcitx5-m17n
+kde-config-fcitx5
+python3-pip
+python3-pyside6.qtcore
+python3-pyside6.qtgui
+python3-pyside6.qtqml
+python3-pyside6.qtquick
+python3-pyside6.qtwidgets
+python3-pyside6.qtsvg
+python3-jeepney

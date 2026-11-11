@@ -1,6 +1,6 @@
 # Hardware
 
-Ambar OS uses Fedora 45's kernel, drivers and firmware, so in principle it runs wherever Fedora 45 KDE runs. This page records what has **actually been tested**. A machine gets a row only after someone has run Ambar OS on it.
+Ambar OS uses Ubuntu 26.04 LTS's kernel (Linux 7.0), drivers and firmware, so in principle it runs wherever Kubuntu 26.04 runs. This page records what has **actually been tested**. A machine gets a row only after someone has run Ambar OS on it.
 
 ## Compatibility list
 
@@ -23,21 +23,21 @@ Ambar OS uses Fedora 45's kernel, drivers and firmware, so in principle it runs 
 
 ## What to expect, by type of hardware
 
-This guidance is based on Fedora's hardware support. It isn't Ambar test results.
+This guidance is based on Ubuntu's hardware support. It isn't Ambar test results.
 
 | Hardware | Expectation |
 |---|---|
 | Intel graphics (integrated) | Works out of the box. |
 | AMD graphics | Works out of the box. |
-| NVIDIA graphics | Works with the open-source `nouveau` driver, which is slower. The proprietary driver isn't included yet. |
+| NVIDIA graphics | Works with the open-source driver; **Driver Manager** installs NVIDIA's driver in one click. |
 | Intel Wi-Fi (`iwlwifi`) | Works out of the box. |
 | MediaTek, Qualcomm, Realtek Wi-Fi | Usually works; some newer chips need a newer kernel. |
-| Broadcom Wi-Fi (`wl`) | Often doesn't work. Fedora doesn't ship that driver by default. |
+| Broadcom Wi-Fi (`wl`) | Driver Manager offers Broadcom's driver when it's needed. |
 | Fingerprint readers | Depends on the model (`fprintd`). |
-| Apple Mac with Apple silicon (M1 and later) | Doesn't run directly. Use a [VM in UTM](install.md#virtual-machine) with the ARM64 image. |
+| Apple Mac with Apple silicon (M1 and later) | Doesn't run directly. A [VM in UTM](install.md#virtual-machine) works under emulation (slow). |
 | Intel Mac | Should boot; Wi-Fi is often Broadcom (see above). |
-| Raspberry Pi 4 / 400 | Image provided ([how](install.md#raspberry-pi-4-and-400)), untested. Desktop will be slow. |
-| Raspberry Pi 5 | Not supported (Fedora doesn't support it yet). |
+| Raspberry Pi 4 / 400 | Not in the main edition. The experimental atomic edition builds a Pi image (`os/build.sh rpi`), untested. |
+| Raspberry Pi 5 | Not supported. |
 | Other ARM64 boards | Only boards with UEFI firmware are supported. |
 
 ## Report your computer
@@ -75,8 +75,8 @@ It doesn't send anything; you choose what to paste. Use `ambar-hwreport --json` 
 
 | Architecture | Image | How it's built and tested |
 |---|---|---|
-| x86_64 (64-bit Intel/AMD PCs) | disk images, live ISO, installer ISO | built and boot-tested (including the desktop) on every change |
-| aarch64 (ARM64 with UEFI) | disk images, live ISO | built natively on ARM64 runners and boot-tested (command-line checks) on every change |
+| x86_64 (64-bit Intel/AMD PCs) | Ambar OS live/installer ISO | built and boot-tested (including the desktop) by the **Ambar OS ISO** workflow |
+| aarch64 (ARM64 with UEFI) | atomic edition only: disk images, live ISO | built natively on ARM64 runners and boot-tested (command-line checks) on every change |
 | aarch64, Raspberry Pi 4/400 | SD-card image | built on every change; can't be boot-tested in CI |
 
-The published image `ghcr.io/alexbieber/ambar-os:latest` is multi-arch, so `bootc switch` and updates pick the right one automatically.
+The main edition (Ubuntu) is x86_64 only for now. The ARM64 and Raspberry Pi rows apply to the experimental atomic edition.

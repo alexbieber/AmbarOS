@@ -4,10 +4,12 @@
 
 **Designed for Humans. Built for AI. Open to Everyone.**
 
-Ambar OS is a Linux operating system for people who want their computer to take care of the repetitive work. It's built on Fedora's KDE Plasma desktop. On top of that, it adds an automation service that runs your automations in the background, an app to manage them, and an optional AI assistant that writes new ones from a plain-language description.
+Ambar OS is a Linux operating system for people who want their computer to take care of the repetitive work. It's built on Ubuntu 26.04 LTS and KDE Plasma 6, designed to look and work like macOS. On top of that, it adds an automation service that runs your automations in the background, an app to manage them, and an optional AI assistant that writes new ones from a plain-language description.
+
+![The Ambar OS desktop](images/os/desktop.jpg)
 
 !!! warning "Early project"
-    The Ambar software is built and tested, but **the OS has not yet been booted on real hardware**. Read [Status](STATUS.md) before you rely on it.
+    The Ambar software is built and tested, but **it has only been booted in virtual machines so far**. Read [Status](STATUS.md) before you rely on it.
 
 ## See it in action
 
@@ -44,7 +46,7 @@ Ambar OS is a Linux operating system for people who want their computer to take 
             │  (local socket, owner token)
          ambard  ── automation engine ── audit log  ← runs as you, in the background
             │
- KDE Plasma 6 · Fedora 45 · bootc image updates     ← the OS underneath
+ macOS-style Plasma 6 desktop · Ubuntu 26.04 LTS   ← the OS underneath
 ```
 
 More detail: [Architecture](architecture.md) and [Service](service.md).

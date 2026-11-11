@@ -1,0 +1,4 @@
+#!/bin/bash
+# Rebuild the initramfs last, so it carries casper and the Ambar boot animation.
+set -euo pipefail
+update-initramfs -u -k all

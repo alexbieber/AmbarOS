@@ -1,79 +1,52 @@
 # Install Ambar OS
 
-Choose the way that fits your situation. Each one installs the same OS image.
-
 | You have… | Do this |
 |---|---|
-| A PC you want to wipe and use for Ambar | [From the live USB](#from-the-live-usb) (recommended) or [the installer ISO](#with-the-installer-iso) |
-| Fedora Kinoite, Silverblue or another bootc system already | [Switch to Ambar](#switch-an-existing-fedora-atomic-system) |
-| A Mac with Apple silicon, or any computer, and want a VM | [Virtual machine](#virtual-machine) |
-| A Raspberry Pi 4 or 400 | [Raspberry Pi](#raspberry-pi-4-and-400) |
+| A PC you want to use for Ambar (alone or next to Windows) | [From the USB stick](#from-the-usb-stick) |
+| A Mac, or you just want to try it | [Virtual machine](#virtual-machine) |
 
 !!! warning "Early project"
-    No physical machine has been tested yet, see [Status](STATUS.md). Keep a backup of anything important, and use a spare machine or a VM first.
+    Ambar OS boots and runs in virtual machines, but it hasn't been tried on many real computers yet, see [Status](STATUS.md). Back up anything important first.
 
 ## Requirements
 
 | | Minimum | Better |
 |---|---|---|
-| CPU | 64-bit x86 (x86_64) or ARM64 with UEFI | 4 cores |
+| CPU | 64-bit Intel or AMD (x86_64) | 4 cores |
 | Memory | 4 GB | 8 GB or more |
-| Disk | 32 GB (the whole disk is used) | SSD, 64 GB or more |
-| Firmware | UEFI | UEFI with Secure Boot |
-| Network | needed for live-USB installs and updates | |
+| Disk | 30 GB | SSD, 64 GB or more |
+| Firmware | UEFI or BIOS | UEFI with Secure Boot |
 
-## From the live USB
+## From the USB stick
 
-Start the live USB ([how](live-usb.md)), then double-click **Install Ambar OS**. Full steps are in [Install from the live session](live-usb.md#4-install-from-the-live-session).
+1. [Write the ISO to a USB stick and start from it](live-usb.md).
+2. Double-click **Install Ambar OS**.
+3. Choose **language, keyboard and location**.
+4. Choose where to install. **Erase disk** uses the whole disk. **Install alongside** keeps Windows or another OS, and you pick at start-up. **Manual** lets you partition yourself. Tick **Encrypt** to protect the disk with a password.
+5. Enter your **name and password**.
+6. Restart and remove the stick.
 
-## With the installer ISO
-
-The installer ISO uses Fedora's installer (Anaconda). It asks for your language, the disk and your account, and it works offline because the OS is inside the ISO.
-
-```sh
-os/build.sh anaconda-iso     # → output/bootiso/install.iso
-```
-
-Write it to a USB stick the same way as the [live ISO](live-usb.md#1-write-the-iso-to-the-stick), boot it, and follow the installer.
-
-## Switch an existing Fedora Atomic system
-
-If you already run Fedora Kinoite, Silverblue or another bootc-based system, you can switch it to Ambar OS. Your files in `/home` stay as they are.
-
-```sh
-sudo bootc switch ghcr.io/alexbieber/ambar-os:latest
-sudo reboot
-```
-
-To go back, choose the previous entry in the boot menu, or run `sudo bootc rollback` and then reboot.
+The installer copies the system from the stick, so it works offline.
 
 ## Virtual machine
 
-Build a VM disk (`os/build.sh qcow2`) or use the live ISO.
+Use the ISO in any virtual machine app:
 
-- **Linux (QEMU/KVM, GNOME Boxes, virt-manager):** create a UEFI VM with 4 GB RAM or more and attach `disk.qcow2` or the ISO. `os/test-qemu.sh <image> --interactive` does this for you.
-- **Mac with Apple silicon (UTM):** use the **ARM64** image (`ambar-os-live-aarch64.iso`, or a qcow2 built on an ARM64 Linux machine). In UTM, choose *Virtualize → Linux*, enable UEFI, and give it 4 GB RAM or more. The x86_64 image would run under emulation, which is very slow.
-- **Windows (Hyper-V, VirtualBox):** use the x86_64 live ISO in a *Generation 2* / EFI VM.
+- **Windows:** VirtualBox, VMware Workstation, Hyper-V (a Generation 2 VM)
+- **Linux:** GNOME Boxes, virt-manager, or `os/ubuntu/test-qemu.sh <iso> --interactive`
 
-!!! note "Test images"
-    The `qcow2` built by `os/build.sh qcow2` contains a test account, `ambar` with password `ambar`. Use it only for testing.
+Give it 4 GB of RAM or more, 2 CPUs or more, and a 30 GB disk, then install as above.
 
-## Raspberry Pi 4 and 400
-
-The Pi image is built on an ARM64 Linux machine (CI does this on every change):
-
-```sh
-os/build.sh rpi              # → output/image/disk.raw, with Pi firmware and U-Boot added
-```
-
-Write `disk.raw` (or the CI artifact `ambar-os-rpi4-aarch64.raw.xz`) to a microSD card of 32 GB or more with Fedora Media Writer, balenaEtcher or `dd`. Put it in the Pi and power it on. You'll create your account on first start.
-
-- **Raspberry Pi 5 is not supported.** Fedora doesn't support it yet.
-- **Expect a slow desktop.** A Pi 4 runs a full Plasma desktop slowly. 8 GB models and a USB SSD help a lot.
-- **Device-tree updates.** The Pi device trees are copied onto the boot partition when the image is built. If a later kernel update needs new ones, they aren't updated automatically yet.
+On a **Mac with Apple silicon**, the current ISO is for Intel/AMD PCs. In UTM it runs under emulation, which works but is slow.
 
 ## After installing
 
-- **First start:** create your account. The **Welcome** then opens and walks you through appearance, the optional AI assistant and starter automations. See [First steps](first-steps.md).
-- **Updates:** installed automatically in the background and applied on the next restart. See [Updates, rollback and recovery](os-image.md#updates-rollback-and-recovery).
-- **Hardware report:** run `ambar-hwreport` and [send it](hardware.md#report-your-computer). It's the fastest way to make Ambar OS work well on your model.
+- **First start:** the **Welcome** opens. It walks you through appearance, the optional AI assistant and starter automations. See [First steps](first-steps.md).
+- **Apps:** open the **Ambar Store** from the Dock. See [Install apps](first-steps.md#install-apps).
+- **Updates:** the Ambar Store tells you when updates are ready. Ambar OS gets Ubuntu 26.04 LTS security updates until 2031.
+- **Snapshots and backup:** **Timeshift** keeps system snapshots you can go back to if an update goes wrong, and the KDE backup tool keeps copies of your files.
+- **Hardware report:** run `ambar-hwreport` and [send it](hardware.md#report-your-computer).
+
+## Other editions
+
+`os/` also contains an experimental **atomic edition** built on Fedora Kinoite with bootc. It has image-based updates and rollback, ARM64 and Raspberry Pi images, but it can't install `.deb` apps from websites. Ambar OS above is the main edition. See [OS images](os-image.md).

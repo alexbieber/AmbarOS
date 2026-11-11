@@ -113,76 +113,128 @@ def color_scheme(mode: str) -> str:
     return "\n".join(out)
 
 
-LAYOUT_JS = r"""// Ambar desktop layout (Plasma 6): a slim top bar and a floating dock.
-// Applied by `plasma-apply-lookandfeel --apply os.ambar.desktop --resetLayout`.
+LAYOUT_JS = r"""// Ambar desktop layout (Plasma 6), modelled on macOS:
+//   top menu bar:  [Ambar menu] [App name] [App's menus …]   …   [status icons] [Control] [Search] [clock]
+//   bottom dock:   [Launchpad] [pinned + running apps] | [Trash]
+// Applied for every new user (kdeglobals LookAndFeelPackage), or by
+// `plasma-apply-lookandfeel --apply os.ambar.desktop --resetLayout`.
 
-var screenGeometry = screenGeometry(0);
+var known = knownWidgetTypes;
+function has(id) { return known.indexOf(id) !== -1; }
+function add(panel, id) { return has(id) ? panel.addWidget(id) : null; }
+function app(ids) {                       // first installed .desktop of a list
+    for (var i = 0; i < ids.length; i++) {
+        if (applicationExists(ids[i])) return "applications:" + ids[i];
+    }
+    return null;
+}
 
-// Top bar: Ambar launcher, application menu, then tray and clock.
-var top = new Panel;
-top.location = "top";
-top.height = Math.round(gridUnit * 1.6);
-var launcher = top.addWidget("org.kde.plasma.kickoff");
-launcher.currentConfigGroup = ["General"];
-launcher.writeConfig("icon", "ambar-logo");
-launcher.writeConfig("favoritesPortedToKAstats", "true");
-top.addWidget("org.kde.plasma.appmenu");
-top.addWidget("org.kde.plasma.panelspacer");
-top.addWidget("org.kde.plasma.systemtray");
-var clock = top.addWidget("org.kde.plasma.digitalclock");
-clock.currentConfigGroup = ["Appearance"];
-clock.writeConfig("showDate", "true");
-clock.writeConfig("dateFormat", "custom");
-clock.writeConfig("customDateFormat", "ddd d MMM");
+// ------------------------------------------------------------ menu bar
+var bar = new Panel;
+bar.location = "top";
+bar.height = Math.round(gridUnit * 1.5);
+bar.floating = false;
 
-// Dock: centred, floating, sized to its contents.
+var menu = add(bar, "os.ambar.menu") || add(bar, "org.kde.plasma.kickoff");
+if (menu && menu.type === "org.kde.plasma.kickoff") {
+    menu.currentConfigGroup = ["General"];
+    menu.writeConfig("icon", "ambar-logo");
+}
+add(bar, "os.ambar.appname");
+add(bar, "org.kde.plasma.appmenu");
+add(bar, "org.kde.plasma.panelspacer");
+var tray = add(bar, "org.kde.plasma.systemtray");
+add(bar, "os.ambar.controlcenter");
+var clock = add(bar, "org.kde.plasma.digitalclock");
+if (clock) {
+    clock.currentConfigGroup = ["Appearance"];
+    clock.writeConfig("showDate", "true");
+    clock.writeConfig("dateDisplayFormat", "BesideTime");
+    clock.writeConfig("dateFormat", "custom");
+    clock.writeConfig("customDateFormat", "ddd d MMM");
+    clock.writeConfig("use24hFormat", "0");
+}
+
+// ------------------------------------------------------------ dock
 var dock = new Panel;
 dock.location = "bottom";
-dock.height = Math.round(gridUnit * 3.2);
+dock.height = Math.round(gridUnit * 3.4);
 dock.alignment = "center";
 dock.lengthMode = "fit";
 dock.floating = true;
 dock.hiding = "dodgewindows";
-var tasks = dock.addWidget("org.kde.plasma.icontasks");
-tasks.currentConfigGroup = ["General"];
-tasks.writeConfig("launchers", [
-    "applications:os.ambar.AutomationCenter.desktop",
-    "applications:org.kde.dolphin.desktop",
-    "applications:org.kde.konsole.desktop",
-    "applications:firefox.desktop",
-    "applications:systemsettings.desktop"
-].join(","));
-tasks.writeConfig("showOnlyCurrentDesktop", "false");
 
-// Wallpaper.
+var launchpad = add(dock, "org.kde.plasma.kickerdash");
+if (launchpad) {
+    launchpad.currentConfigGroup = ["General"];
+    launchpad.writeConfig("icon", "view-app-grid-symbolic");
+    launchpad.writeConfig("showRecentApps", "false");   // open on the full app grid
+    launchpad.writeConfig("showRecentDocs", "false");
+    launchpad.writeConfig("alphaSort", "true");
+    launchpad.writeConfig("showActionButtonCaptions", "false");
+}
+var tasks = add(dock, "org.kde.plasma.icontasks");
+if (tasks) {
+    var pinned = [
+        app(["org.kde.dolphin.desktop"]),                                   // Finder
+        app(["firefox.desktop", "org.kde.falkon.desktop"]),                // Browser
+        app(["org.kde.kmail2.desktop", "org.kde.kontact.desktop"]),        // Mail
+        app(["org.kde.korganizer.desktop"]),                                // Calendar
+        app(["org.kde.elisa.desktop"]),                                     // Music
+        app(["org.kde.gwenview.desktop"]),                                  // Photos
+        app(["libreoffice-writer.desktop"]),                                // Documents
+        app(["org.kde.konsole.desktop"]),                                   // Terminal
+        app(["org.kde.discover.desktop"]),                                  // Ambar Store
+        app(["os.ambar.AutomationCenter.desktop"]),                         // Automations
+        app(["systemsettings.desktop"])                                     // Settings
+    ].filter(function (x) { return x !== null; });
+    tasks.currentConfigGroup = ["General"];
+    tasks.writeConfig("launchers", pinned.join(","));
+    tasks.writeConfig("showOnlyCurrentDesktop", "false");
+    tasks.writeConfig("indicateAudioStreams", "true");
+    tasks.writeConfig("iconSpacing", "1");
+}
+add(dock, "org.kde.plasma.marginsseparator");
+add(dock, "org.kde.plasma.trash");
+
+// ------------------------------------------------------------ desktop
 var all = desktops();
 for (var i = 0; i < all.length; i++) {
     var d = all[i];
     d.wallpaperPlugin = "org.kde.image";
     d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    d.writeConfig("Image", "Ambar");
+    d.writeConfig("Image", "file:///usr/share/wallpapers/Ambar/");
 }
 """
 
 
 def defaults(mode: str) -> str:
     scheme = f"Ambar{mode.capitalize()}"
+    dark = mode == "dark"
     return f"""[kdeglobals][General]
 ColorScheme={scheme}
 AccentColor={kde(PALETTE[mode]["accent"])}
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[kdeglobals][WM]
+activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
 
 [kdeglobals][KDE]
 widgetStyle=Breeze
+SingleClick=false
 
 [kdeglobals][Icons]
-Theme={"breeze-dark" if mode == "dark" else "breeze"}
+Theme={"Papirus-Dark" if dark else "Papirus"}
 
 [plasmarc][Theme]
-name={"breeze-dark" if mode == "dark" else "default"}
+name={"breeze-dark" if dark else "default"}
 
 [kwinrc][org.kde.kdecoration2]
-library=org.kde.breeze
-theme=Breeze
+library=org.kde.kwin.aurorae.v2
+theme=__aurorae__svg__{"AmbarDark" if dark else "Ambar"}
 ButtonsOnLeft=XIA
 ButtonsOnRight=
 

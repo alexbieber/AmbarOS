@@ -1,0 +1,31 @@
+#!/bin/bash
+# Install-anything defaults: .deb opens in the Ambar Store, Windows programs
+# open with Wine, and Flatpak/AppImage files are recognised.
+set -euo pipefail
+
+# Windows programs (.exe/.msi) → Wine.
+cat > /usr/share/applications/wine.desktop <<'DESK'
+[Desktop Entry]
+Type=Application
+Name=Wine Windows Program Loader
+Comment=Run Windows programs
+Exec=wine start /unix %f
+Icon=wine
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/x-msi;application/x-ms-shortcut;application/vnd.microsoft.portable-executable;application/x-wine-extension-msp;
+NoDisplay=true
+Terminal=false
+Categories=System;Emulator;
+DESK
+
+# Default apps for file types.
+cat > /etc/xdg/mimeapps.list <<'MIME'
+[Default Applications]
+application/vnd.debian.binary-package=org.kde.discover.desktop
+application/vnd.flatpak.ref=org.kde.discover.desktop
+application/vnd.flatpak.repo=org.kde.discover.desktop
+application/x-ms-dos-executable=wine.desktop
+application/x-msdownload=wine.desktop
+application/x-msi=wine.desktop
+application/vnd.microsoft.portable-executable=wine.desktop
+MIME
+update-desktop-database -q /usr/share/applications || true

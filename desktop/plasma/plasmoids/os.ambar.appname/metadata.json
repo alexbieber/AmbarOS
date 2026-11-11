@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Ambar OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Name of the app in front, in the menu bar",
+        "Icon": "window",
+        "Id": "os.ambar.appname",
+        "License": "Apache-2.0",
+        "Name": "App Name",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

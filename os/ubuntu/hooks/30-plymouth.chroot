@@ -1,0 +1,6 @@
+#!/bin/bash
+# Ambar boot animation as the default Plymouth theme.
+set -euo pipefail
+update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth \
+  /usr/share/plymouth/themes/ambar/ambar.plymouth 300
+update-alternatives --set default.plymouth /usr/share/plymouth/themes/ambar/ambar.plymouth

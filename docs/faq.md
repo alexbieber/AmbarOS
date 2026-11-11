@@ -4,13 +4,19 @@
 
 Not yet. The Ambar software is built and has an extensive test suite, but the OS hasn't been booted on physical hardware. [Status](STATUS.md) lists exactly what is and isn't proven.
 
-### Is it a Fedora remix?
+### What is it built on?
 
-It's built on Fedora's KDE atomic desktop (Kinoite). Ambar adds its own software, desktop look and defaults on top. Fedora tools such as `dnf`, `toolbox` and `bootc` keep working. Ambar OS is not affiliated with or endorsed by the Fedora Project.
+**Ubuntu 26.04 LTS** with the **KDE Plasma 6** desktop. Ambar adds:
+
+- a macOS-style design: menu bar, Dock, Launchpad, Control Center and window buttons
+- its own apps and defaults
+- the automation layer
+
+Ubuntu tools such as `apt` keep working, and Ubuntu's security updates apply until 2031. Ambar OS is not affiliated with or endorsed by Canonical or KDE.
 
 ### How do I install apps?
 
-Install desktop apps from **Discover**, which installs Flatpak apps. If Flathub isn't listed, enable it in Discover's settings. For command-line tools, use a **toolbox** (`toolbox create`, then `toolbox enter`) and `dnf install` inside it. The base system is read-only on purpose, which is what makes updates safe to undo.
+Almost any way you like: the **Ambar Store**, a `.deb` from a website (double-click it), Flathub, Snap, AppImage, Windows programs through Wine, and `apt` in Terminal. See [Install apps](first-steps.md#install-apps).
 
 ### Can automations run commands or scripts?
 
@@ -30,18 +36,18 @@ An agent is a program, often an AI assistant, that you give an identity and limi
 
 ### How is it different from Kali Linux?
 
-Kali is a toolkit for security testing: you run attack and analysis tools by hand. Ambar OS is an everyday desktop that runs safe automations for you. Ambar OS has atomic updates with rollback; Kali updates package by package. If you want Kali's tools on Ambar OS, run them in a container:
+Kali is a toolkit for security testing: you run attack and analysis tools by hand. Ambar OS is an everyday desktop that runs safe automations for you. Ambar OS keeps system snapshots with Timeshift, so you can go back after a bad update. If you want Kali's tools on Ambar OS, run them in a container:
 
 ```sh
 distrobox create --name kali --image docker.io/kalilinux/kali-rolling
 distrobox enter kali
 ```
 
-The `distrobox` tool isn't included in the image; get it with `toolbox` or from Fedora's packages.
+`distrobox` is installed.
 
 ### Does it run on a Mac?
 
-Not directly on Apple silicon. Use a VM in UTM with the ARM64 image ([how](install.md#virtual-machine)). The `ambar` command and the service also run on macOS itself. That port is untested.
+Intel Macs can boot the ISO. On Apple silicon, use a VM ([how](install.md#virtual-machine)). The `ambar` command and the service also run on macOS itself. That port is untested.
 
 ### Where is my data?
 

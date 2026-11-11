@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Ambar OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Wi-Fi, Bluetooth, sound, brightness, dark mode and more, in one place",
+        "Icon": "settings-configure",
+        "Id": "os.ambar.controlcenter",
+        "License": "Apache-2.0",
+        "Name": "Control Center",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

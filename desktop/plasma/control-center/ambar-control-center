@@ -1,0 +1,218 @@
+#!/usr/bin/python3
+"""Backend for the Ambar Control Center (the menu-bar panel like macOS's).
+
+    ambar-control-center status            JSON with every toggle and slider
+    ambar-control-center set wifi on|off
+    ambar-control-center set bluetooth on|off
+    ambar-control-center set airplane on|off
+    ambar-control-center set dark on|off
+    ambar-control-center set nightlight on|off
+    ambar-control-center set dnd on|off
+    ambar-control-center set volume 0..100 | mute
+    ambar-control-center set brightness 0..100
+
+Uses the standard tools of the system (nmcli, bluetoothctl, rfkill, wpctl,
+kreadconfig6/kwriteconfig6, plasma-apply-lookandfeel, busctl). Anything that
+isn't available is reported as null, and the panel hides it.
+"""
+from __future__ import annotations
+
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+LIGHT, DARK = "os.ambar.desktop", "os.ambar.desktop.dark"
+DND_FOREVER = "2100,1,1,0,0,0"
+
+
+def run(*cmd: str, timeout: float = 4) -> tuple[int, str]:
+    if not shutil.which(cmd[0]):
+        return 127, ""
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, p.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def readcfg(file: str, group: str, key: str) -> str | None:
+    code, out = run("kreadconfig6", "--file", file, "--group", group, "--key", key)
+    return out if code == 0 else None
+
+
+def writecfg(file: str, group: str, key: str, value: str | None, typ: str | None = None) -> bool:
+    args = ["kwriteconfig6", "--file", file, "--group", group, "--key", key]
+    if value is None:
+        args += ["--delete"]
+    else:
+        if typ:
+            args += ["--type", typ]
+        args += [value]
+    return run(*args)[0] == 0
+
+
+# ------------------------------------------------------------------ readers
+
+def wifi() -> dict | None:
+    code, out = run("nmcli", "-t", "radio", "wifi")
+    if code != 0:
+        return None
+    on = out.strip() == "enabled"
+    ssid = ""
+    if on:
+        _, nets = run("nmcli", "-t", "-f", "active,ssid", "dev", "wifi")
+        for line in nets.splitlines():
+            if line.startswith("yes:"):
+                ssid = line[4:].replace("\\:", ":")
+                break
+    return {"on": on, "detail": ssid}
+
+
+def bluetooth() -> dict | None:
+    code, out = run("bluetoothctl", "show")
+    if code != 0 or "Controller" not in out:
+        return None
+    return {"on": bool(re.search(r"^\s*Powered:\s*yes", out, re.M)), "detail": ""}
+
+
+def airplane() -> dict | None:
+    code, out = run("rfkill", "-J")
+    if code != 0 or not out:
+        return None
+    devs = next(iter(json.loads(out).values()), [])
+    if not devs:
+        return None
+    return {"on": all(d.get("soft") == "blocked" for d in devs), "detail": ""}
+
+
+def dark() -> dict:
+    pkg = readcfg("kdeglobals", "KDE", "LookAndFeelPackage") or ""
+    return {"on": pkg.endswith(".dark") or pkg.endswith("dark.desktop"), "detail": ""}
+
+
+def nightlight() -> dict:
+    return {"on": (readcfg("kwinrc", "NightColor", "Active") or "").lower() == "true", "detail": ""}
+
+
+def dnd() -> dict:
+    return {"on": bool(readcfg("plasmanotifyrc", "DoNotDisturb", "Until")), "detail": ""}
+
+
+def volume() -> dict | None:
+    code, out = run("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+    m = re.search(r"Volume:\s*([0-9.]+)", out) if code == 0 else None
+    if not m:
+        return None
+    return {"value": round(float(m.group(1)) * 100), "muted": "MUTED" in out}
+
+
+def brightness() -> dict | None:
+    """Screen brightness through PowerDevil (org.kde.ScreenBrightness, Plasma 6.2+)."""
+    code, out = run("busctl", "--user", "--json=short", "get-property", "org.kde.ScreenBrightness",
+                    "/org/kde/ScreenBrightness/display0", "org.kde.ScreenBrightness.Display", "Brightness")
+    code2, out2 = run("busctl", "--user", "--json=short", "get-property", "org.kde.ScreenBrightness",
+                      "/org/kde/ScreenBrightness/display0", "org.kde.ScreenBrightness.Display", "MaxBrightness")
+    if code or code2:
+        return None
+    try:
+        cur, mx = json.loads(out)["data"], json.loads(out2)["data"]
+    except (ValueError, KeyError):
+        return None
+    return {"value": round(cur * 100 / mx) if mx else 0}
+
+
+def status() -> dict:
+    return {"wifi": wifi(), "bluetooth": bluetooth(), "airplane": airplane(), "dark": dark(),
+            "nightlight": nightlight(), "dnd": dnd(), "volume": volume(), "brightness": brightness()}
+
+
+# ------------------------------------------------------------------ setters
+
+def onoff(v: str) -> bool:
+    if v not in ("on", "off"):
+        raise SystemExit(f"expected on or off, got {v!r}")
+    return v == "on"
+
+
+def set_(key: str, value: str) -> int:
+    if key == "wifi":
+        return run("nmcli", "radio", "wifi", "on" if onoff(value) else "off")[0]
+    if key == "bluetooth":
+        if onoff(value):
+            run("rfkill", "unblock", "bluetooth")
+        return run("bluetoothctl", "power", "on" if onoff(value) else "off")[0]
+    if key == "airplane":
+        return run("rfkill", "block" if onoff(value) else "unblock", "all")[0]
+    if key == "dark":
+        return appearance(onoff(value))
+    if key == "nightlight":
+        ok = writecfg("kwinrc", "NightColor", "Active", "true" if onoff(value) else "false", "bool")
+        run("busctl", "--user", "call", "org.kde.KWin", "/KWin", "org.kde.KWin", "reconfigure")
+        return 0 if ok else 1
+    if key == "dnd":
+        return 0 if writecfg("plasmanotifyrc", "DoNotDisturb", "Until",
+                             DND_FOREVER if onoff(value) else None) else 1
+    if key == "volume":
+        if value == "mute":
+            return run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle")[0]
+        pct = clamp(value)
+        run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0")
+        return run("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{pct / 100:.2f}")[0]
+    if key == "brightness":
+        cur = brightness()
+        if cur is None:
+            return 1
+        _, out = run("busctl", "--user", "--json=short", "get-property", "org.kde.ScreenBrightness",
+                     "/org/kde/ScreenBrightness/display0", "org.kde.ScreenBrightness.Display", "MaxBrightness")
+        mx = json.loads(out)["data"]
+        target = max(1, round(clamp(value) * mx / 100))
+        return run("busctl", "--user", "call", "org.kde.ScreenBrightness", "/org/kde/ScreenBrightness/display0",
+                   "org.kde.ScreenBrightness.Display", "SetBrightness", "iu", str(target), "0")[0]
+    raise SystemExit(f"unknown setting {key!r}")
+
+
+def libexec(name: str) -> str:
+    """Plasma keeps some of its tools outside PATH (…/libexec)."""
+    for p in [*glob.glob(f"/usr/lib/*/libexec/{name}"), f"/usr/libexec/{name}"]:
+        if os.access(p, os.X_OK):
+            return p
+    return name
+
+
+def appearance(dark_on: bool) -> int:
+    """Switches the whole desktop between Ambar light and dark.
+
+    plasma-apply-lookandfeel alone only applies the colours, so each part is
+    applied with its own tool, which also tells running apps to update."""
+    pkg = DARK if dark_on else LIGHT
+    code = run("plasma-apply-lookandfeel", "-a", pkg, timeout=30)[0]
+    run("plasma-apply-colorscheme", "AmbarDark" if dark_on else "AmbarLight", timeout=20)
+    run("plasma-apply-desktoptheme", "breeze-dark" if dark_on else "default", timeout=20)
+    run(libexec("plasma-changeicons"), "Papirus-Dark" if dark_on else "Papirus", timeout=20)
+    run(libexec("plasma-apply-aurorae"), "__aurorae__svg__AmbarDark" if dark_on else "__aurorae__svg__Ambar", timeout=20)
+    return code
+
+
+def clamp(v: str) -> int:
+    try:
+        return max(0, min(100, int(float(v))))
+    except ValueError:
+        raise SystemExit(f"expected a number 0-100, got {v!r}")
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == ["status"]:
+        print(json.dumps(status()))
+        return 0
+    if len(argv) == 3 and argv[0] == "set":
+        return set_(argv[1], argv[2])
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
