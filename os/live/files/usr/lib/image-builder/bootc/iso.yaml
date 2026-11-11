@@ -1,0 +1,17 @@
+# Read by image-builder (generic-iso) when it turns this container into an ISO.
+label: "AmbarOS-Live"
+kernel_args:
+  - rd.live.image
+  - quiet
+  - rhgb
+  - console=tty0
+  - console=ttyS0,115200n8
+grub2:
+  timeout: 5
+  entries:
+    - name: "Try Ambar OS"
+      linux: ${kernelpath} ${root}
+      initrd: ${initrdpath}
+    - name: "Try Ambar OS (safe graphics)"
+      linux: ${kernelpath} ${root} nomodeset
+      initrd: ${initrdpath}

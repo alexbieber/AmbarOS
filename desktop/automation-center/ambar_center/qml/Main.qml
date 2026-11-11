@@ -222,13 +222,13 @@ ApplicationWindow {
                     Layout.topMargin: 8
                     Layout.bottomMargin: 22
                     Layout.leftMargin: 6
-                    Rectangle {
-                        width: 32; height: 32; radius: 10
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: "#F2A43A" }
-                            GradientStop { position: 1; color: "#C9620A" }
-                        }
-                        Text { anchors.centerIn: parent; text: "A"; color: "white"; font.pixelSize: 18; font.weight: Font.Bold }
+                    Image {
+                        objectName: "brandMark"
+                        source: "../mark.svg"
+                        Layout.preferredWidth: 36; Layout.preferredHeight: 26
+                        sourceSize.width: 72; sourceSize.height: 52
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
                     }
                     ColumnLayout {
                         spacing: 0

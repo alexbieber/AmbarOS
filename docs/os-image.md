@@ -10,8 +10,11 @@ os/
                          login-screen wallpaper, serial console kargs, marketplace config
   config/qcow2.toml      bootc-image-builder: TEST user ambar/ambar
   config/iso.toml        bootc-image-builder: interactive Anaconda installer
-  build.sh               container image → qcow2 | raw | anaconda-iso
-  test-qemu.sh           boots a disk under UEFI and runs smoke_test.py
+  build.sh               container image → qcow2 | raw | anaconda-iso | live-iso | rpi
+  live/                  live ISO layer: dracut-live, boot menu, liveuser, installer
+  rpi-firmware.sh        adds Raspberry Pi firmware + U-Boot to an ARM64 raw disk
+  config/rpi.toml        bootc-image-builder: Pi image, account made on first boot
+  test-qemu.sh           boots a disk or ISO (x86_64 or aarch64) under UEFI, runs smoke_test.py
   smoke_test.py          serial-console login + checks that Ambar works inside the OS
 ```
 
@@ -22,8 +25,11 @@ os/
 - **Desktop:** the Ambar look (colour schemes, look-and-feel, wallpaper, icons and launcher) is the default for new users through `/etc/xdg/kdeglobals`. Window buttons sit on the left, and the login screen uses the Ambar wallpaper.
 - **Search:** typing in KRunner (Alt+Space) finds and runs automations, drafts new ones ("automate …"), and shows waiting approvals. It's a D-Bus runner, activated on demand.
 - **First login:** the Welcome setup opens once and covers the service, appearance, AI and starter automations.
+- **First boot:** systems installed without an account (from the live USB, Raspberry Pi images) create it with `plasma-setup` on first start.
+- **Hardware reports:** `ambar-hwreport` prints what's needed for the [hardware list](hardware.md), without serial numbers or addresses.
+- **Architectures:** x86_64 and aarch64 (ARM64), published as one multi-arch image.
 - **Marketplace:** the bundled marketplace is at `/usr/share/ambar/marketplace`, and `ambar pkg search` uses it by default. Publishers still have to be trusted explicitly.
-- **Branding:** `NAME`, `PRETTY_NAME`, `VARIANT` and `IMAGE_ID`. `ID=fedora` and `VERSION_ID` are kept so dnf, toolbox and bootc keep working.
+- **Branding:** the Ambar logo (`desktop/brand/`) is the launcher icon, the About-this-system logo and the Automation Center icon. In os-release: `NAME`, `PRETTY_NAME`, `VARIANT` and `IMAGE_ID`. `ID=fedora` and `VERSION_ID` are kept so dnf, toolbox and bootc keep working.
 
 ## Build
 
@@ -34,7 +40,13 @@ os/build.sh                  # container image: localhost/ambar-os:latest
 os/build.sh qcow2            # + output/qcow2/disk.qcow2   (test user ambar / ambar)
 os/build.sh anaconda-iso     # + output/bootiso/install.iso (interactive installer)
 os/build.sh raw              # + output/image/disk.raw      (dd to a disk)
+os/build.sh live-iso         # + output/live/ambar-os-live-<arch>.iso (try without installing)
+os/build.sh rpi              # + Raspberry Pi 4/400 SD-card image (on an ARM64 machine)
 ```
+
+Everything builds for the architecture of the machine you build on. CI builds x86_64 and aarch64 on native runners.
+
+The live ISO is made by `image-builder` (`generic-iso`), the successor of bootc-image-builder. The other disk types still use bootc-image-builder, which remains supported. Details: [Try it from a USB stick](live-usb.md).
 
 - **Base image:** change it with `--build-arg BASE_IMAGE=…`. For example, `quay.io/fedora/fedora-bootc:45` plus your own KDE package set.
 - **Fedora version:** change it with `--build-arg FEDORA_VERSION=…`.
@@ -63,15 +75,26 @@ It then logs the test user into the graphical session and checks:
 
 Finally it saves a screenshot of the desktop (`output/desktop.png`, uploaded by CI).
 
-The `os-image` CI workflow (`.github/workflows/os-image.yml`) does all of this on every push to `main`. It builds the container, builds the qcow2, boots it under KVM, runs the smoke test, then pushes `ghcr.io/<owner>/ambar-os`.
+The live ISO is tested the same way, logging in as `liveuser` (`os/test-qemu.sh output/live/ambar-os-live-x86_64.iso`). For ARM64, set `ARCH=aarch64` on an x86 machine, or just run it on an ARM64 one.
+
+The `os-image` CI workflow (`.github/workflows/os-image.yml`) runs on every push to `main`, once for each architecture:
+
+1. build the container and the qcow2
+2. boot the qcow2 and run the smoke test
+3. build the live ISO and boot-test it (x86_64)
+4. build the Raspberry Pi image (ARM64)
+
+It then publishes `ghcr.io/<owner>/ambar-os` as one signed multi-arch image. The ISOs and the Pi image are kept as downloadable artifacts for 14 days.
 
 ## Install
 
-| Starting point | How |
-|---|---|
-| Blank machine | Write `install.iso` to a USB stick and boot it. |
-| Already on Fedora Kinoite / Silverblue / any bootc system | `sudo bootc switch ghcr.io/alexbieber/ambar-os:latest`, then reboot. |
-| VM | Use `disk.qcow2`. |
+See [Install](install.md) for every route:
+
+- the live USB's installer
+- the Anaconda installer ISO
+- `bootc switch` from Fedora Atomic
+- VMs, including UTM on Apple silicon Macs
+- Raspberry Pi
 
 ## Updates, rollback and recovery
 
@@ -87,14 +110,11 @@ The `os-image` CI workflow (`.github/workflows/os-image.yml`) does all of this o
 
 ## Hardware
 
-Ambar OS uses Fedora 45's kernel, firmware and drivers, so its hardware support is Fedora's. **No physical machine has been tested yet.** Add rows as machines are verified:
-
-| Machine | Boot | Wi-Fi | Graphics | Suspend | Notes |
-|---|---|---|---|---|---|
-| QEMU/KVM (q35, UEFI, virtio) | CI | n/a | virtio | n/a | smoke test |
+Ambar OS uses Fedora 45's kernel, firmware and drivers. What has actually been tested, and how to report your machine, is in [Hardware](hardware.md).
 
 ## Status and known gaps
 
+- **Live install is network-based:** the live USB's installer pulls the image from GHCR, so it needs internet, and the GHCR package must be public. An offline install uses the installer ISO.
 - **Not yet built or booted.** The image could not be built where it was written: there was no access to Fedora's registries and no virtualization. The recipe is checked statically (COPY sources, configs, the systemd unit with `systemd-analyze`, shellcheck, the branding script, the Python install step). The smoke harness is tested against a simulated console. The **first real build and boot happens in the `os-image` CI job**, and its results decide whether this is done.
 - **Signature enforcement on the client:** CI signs pushed images with cosign (keyless, sigstore). Installed systems don't yet *require* a valid signature before `bootc upgrade` (`/etc/containers/policy.json`). Add that once the signing identity is final.
 - **SELinux:** `ambard` runs unconfined as the user. A confined policy module is still to do.

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/brand/ambar-os-logo.png" alt="Ambar OS" width="420"></p>
+
 # Ambar OS
 
 **Designed for Humans. Built for AI. Open to Everyone.**
@@ -6,11 +8,26 @@ Ambar OS is an AI-native, Linux-based operating system: the simplicity of macOS,
 the openness of Linux, and automation built in from the start. See
 [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for the full vision and phases.
 
+**Documentation:** [alexbieber.github.io/AmbarOS](https://alexbieber.github.io/AmbarOS/), built from [`docs/`](docs/index.md):
+
+- [Try it from a USB stick](docs/live-usb.md)
+- [Install](docs/install.md)
+- [First steps](docs/first-steps.md)
+- [Hardware](docs/hardware.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [FAQ](docs/faq.md)
+
 ## Status
 
-The full Ambar software stack is built and tested: automation engine, background service with live approvals, AI automation builder, agent runtime, Automation Center desktop app (with first-run Welcome), KRunner search, Plasma theme, SDK, packages and marketplace. **The bootable OS image is written but has not been built or booted yet.** That happens in CI (`os-image` workflow). Everything has been tested on Linux; macOS is untested.
+The full Ambar software stack is built and tested: automation engine, background service with live approvals, AI automation builder, agent runtime, Automation Center desktop app (with first-run Welcome), KRunner search, Plasma theme, SDK, packages and marketplace. **The bootable OS images are written but have not been built or booted yet.** These are:
 
-163 automated tests pass, plus ~30,000 property-test cases. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
+- an x86_64 and ARM64 install image
+- a live USB with a built-in installer
+- a Raspberry Pi 4 image
+
+Building and booting them happens in CI (`os-image` workflow). Everything has been tested on Linux; macOS is untested.
+
+185 automated tests pass, plus ~30,000 property-test cases. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
 
 ![Automation Center](docs/images/automation-center.png)
 
@@ -30,7 +47,10 @@ The full Ambar software stack is built and tested: automation engine, background
 | Automation Center (Qt/QML desktop app) | `desktop/automation-center` | |
 | Ambar Plasma theme (colours, look-and-feel, wallpaper) | `desktop/plasma` | |
 | Python SDK (owners and agents) | `sdk/python` | [developer guide](docs/developer-guide.md) |
-| Bootable OS image (bootc, Fedora 45 Kinoite) | `os/` | [OS image](docs/os-image.md) |
+| Bootable OS image (bootc, Fedora 45 Kinoite), x86_64 + ARM64 | `os/` | [OS image](docs/os-image.md) |
+| Live USB with installer, Raspberry Pi image | `os/live/`, `os/rpi-firmware.sh` | [live USB](docs/live-usb.md), [install](docs/install.md) |
+| Hardware report tool and compatibility list | `ambar-hwreport` | [hardware](docs/hardware.md) |
+| Docs site, contributing, security policy | `docs/`, `mkdocs.yml`, root `*.md` | [community](docs/community.md) |
 
 ## Quick start
 
@@ -74,6 +94,7 @@ desktop/install.sh                          # Plasma: Ambar look, wallpaper, lau
 
 # The OS image (Linux with rootful podman)
 os/build.sh qcow2 && os/test-qemu.sh
+os/build.sh live-iso                        # live USB: try without installing, install from it
 ```
 
 A workflow looks like this:
@@ -123,11 +144,15 @@ bash scripts/verify.sh            # everything below plus a live ambard smoke te
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-python3 -m pytest sdk/python/tests desktop os/tests   # needs PySide6-Essentials, pytest
+python3 -m pytest sdk/python/tests desktop os/tests tests   # needs PySide6-Essentials, pytest, pyyaml
 ```
 
 CI: `.github/workflows/ci.yml` runs Rust on Linux and macOS, the MSRV check, `cargo audit`, the Python and desktop tests (uploading screenshots), and the unit-file checks. `.github/workflows/os-image.yml` builds and boots the OS image.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and the [security policy](SECURITY.md). If you only have five minutes, [send a hardware report](docs/hardware.md#report-your-computer).
+
 ## License
 
-Apache-2.0 (declared in `Cargo.toml`; add the `LICENSE` file before publishing).
+[Apache-2.0](LICENSE).

@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# Creates "liveuser" (no password, sudo without password) for the live session.
+# Runs at boot on live media only (ConditionKernelCommandLine=rd.live.image).
+set -euo pipefail
+LIVE_USER=liveuser
+if ! id "$LIVE_USER" &>/dev/null; then
+  useradd -m -c "Live User" -G wheel "$LIVE_USER"
+fi
+passwd -d "$LIVE_USER" >/dev/null
+# Skip the first-login Welcome on the live medium? No: showing it is the point
+# of trying Ambar. But nothing it sets survives a reboot, and it says so.
+mkdir -p "/home/$LIVE_USER/.config"
+printf '[General]\nLiveSession=true\n' > "/home/$LIVE_USER/.config/ambar-live"
+chown -R "$LIVE_USER:$LIVE_USER" "/home/$LIVE_USER/.config"
+# Put "Install Ambar OS" on the desktop.
+install -D -m 0755 -o "$LIVE_USER" -g "$LIVE_USER" \
+  /usr/share/applications/os.ambar.Install.desktop "/home/$LIVE_USER/Desktop/os.ambar.Install.desktop"

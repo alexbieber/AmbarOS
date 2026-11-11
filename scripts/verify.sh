@@ -17,7 +17,7 @@ echo "all tests passed: $total"
 
 step "python: SDK, Automation Center, Plasma theme, OS recipe"
 if python3 -c "import PySide6, pytest" 2>/dev/null; then
-  QT_QPA_PLATFORM=offscreen python3 -m pytest -q sdk/python/tests desktop os/tests
+  QT_QPA_PLATFORM=offscreen python3 -m pytest -q sdk/python/tests desktop os/tests tests
 else
   echo "skipped (pip install PySide6-Essentials pytest to run them)"
 fi

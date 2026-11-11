@@ -105,3 +105,33 @@ def test_desktop_entry():
     if shutil.which("desktop-file-validate"):
         r = subprocess.run(["desktop-file-validate", str(f)], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
+
+
+BRAND = DESKTOP / "brand"
+ICONS = DESKTOP / "share" / "icons" / "hicolor"
+
+
+def test_brand_assets_are_valid_and_installed_everywhere():
+    """The Ambar logo is valid SVG, renders, and every copy matches the source."""
+    import xml.etree.ElementTree as ET
+    mark = (BRAND / "ambar-mark.svg").read_bytes()
+    icon = (BRAND / "ambar-icon.svg").read_bytes()
+    for data in (mark, icon):
+        root = ET.fromstring(data)
+        assert root.tag.endswith("svg") and root.get("viewBox")
+        assert not root.findall(".//{http://www.w3.org/2000/svg}svg"), "nested <svg> is dropped by Qt"
+        assert b"<script" not in data and b"href=\"http" not in data
+    # Copies: launcher/About logo = mark; app icon = tile.
+    assert (ICONS / "scalable/apps/ambar-logo.svg").read_bytes() == mark
+    assert (ICONS / "scalable/apps/os.ambar.AutomationCenter.svg").read_bytes() == icon
+    app = DESKTOP / "automation-center" / "ambar_center"
+    assert (app / "icon.svg").read_bytes() == icon
+    assert (app / "mark.svg").read_bytes() == mark
+    for n in (32, 48, 64, 128, 256, 512):
+        png = ICONS / f"{n}x{n}/apps/os.ambar.AutomationCenter.png"
+        assert png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    pytest.importorskip("PySide6.QtSvg")
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtCore import QByteArray
+    for data in (mark, icon):
+        assert QSvgRenderer(QByteArray(data)).isValid()

@@ -1,0 +1,16 @@
+[Unit]
+Description=Ambar OS live session: create the passwordless live user
+Documentation=https://github.com/alexbieber/AmbarOS/blob/main/docs/live-usb.md
+# Only ever on live media, never on an installed system.
+ConditionKernelCommandLine=rd.live.image
+DefaultDependencies=no
+After=systemd-sysusers.service local-fs.target
+Before=display-manager.service systemd-user-sessions.service getty.target serial-getty@ttyS0.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/ambar-live-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

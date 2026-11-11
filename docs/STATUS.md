@@ -14,10 +14,16 @@ The full Ambar software stack is built and tested on Linux:
 - Plasma theme
 - SDK, packages and marketplace
 
-The bootable OS image is **written but has never been built or booted**. That needs a machine with Fedora registry access and KVM: the `os-image` CI job, which runs on GitHub as soon as the repo is pushed, or a Linux PC.
+The bootable OS images are **written but have never been built or booted**:
+
+- x86_64 and ARM64 install images
+- a live USB with a built-in installer
+- a Raspberry Pi 4/400 image
+
+User documentation is a site built from `docs/`. There's a hardware report tool and contribution guides. That needs a machine with Fedora registry access and KVM: the `os-image` CI job, which runs on GitHub as soon as the repo is pushed, or a Linux PC.
 
 **What is proven and what isn't:**
-- **Proven:** the software, by 163 automated tests and ~30,000 property-test cases.
+- **Proven:** the software, by 185 automated tests and ~30,000 property-test cases.
 - **Not proven:** that the OS boots on any machine. The CI boot test is written to prove it: login, service, marketplace, a real workflow run, Plasma, Welcome and KRunner, plus a desktop screenshot.
 
 | Phase | What | Status |
@@ -29,6 +35,8 @@ The bootable OS image is **written but has never been built or booted**. That ne
 | 6 | Agent identities, scopes, proposals, memory, rate limits | ✅ built and tested |
 | 7 | Python SDK, signed packages, marketplace, developer guide | ✅ built and tested |
 | 8 | Bootable image (bootc, Fedora 45 Kinoite), installer ISO, signed updates, rollback | ⚠ written and statically checked · ❌ **not built or booted** |
+| 8+ | **Live USB** with installer, **ARM64** + **Raspberry Pi** images, `ambar-hwreport`, hardware list | ✅ installer safety rules, hardware report and recipes tested · ❌ **not built or booted** |
+| — | Docs site (MkDocs, strict), contributing, code of conduct, security policy, issue forms | ✅ site builds strict; every documented `ambar` command and flag checked against the real CLI |
 
 ## Test results (2026-11-11, Ubuntu 24.04 container)
 
@@ -38,9 +46,11 @@ The bootable OS image is **written but has never been built or booted**. That ne
 | Python SDK against a real `ambard` | 4 |
 | Automation Center: real `ambard`, offscreen QML, both themes, AI drafts, live approvals, Welcome, starter packs | 9 |
 | KRunner runner: matching + real D-Bus session bus | 2 |
-| Plasma theme, desktop entries, KRunner/autostart registration | 9 |
+| Plasma theme, desktop entries, KRunner/autostart registration, brand logo assets | 10 |
 | OS recipe: COPY sources, configs, systemd unit, shellcheck, branding, boot smoke harness (pass and fail) | 8 |
-| **Total** | **163**: 3 consecutive full runs plus 6 runs under double load, all green |
+| Live USB, installer, ARM64/Pi, hardware report | 16 |
+| Docs: strict site build, nav completeness, documented commands/flags exist, community files | 5 |
+| **Total** | **185**, 3 consecutive full runs, all green |
 
 Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `cargo audit`, `shellcheck`, `desktop-file-validate`, `systemd-analyze verify`, WCAG AA contrast.
 
@@ -53,6 +63,8 @@ Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `
 | Restore after restart skipped | `enabled_workflows_are_restored_after_restart` |
 | AI description passed without `--` (flag injection) | `test_descriptions_are_never_parsed_as_flags` |
 | Agent allowed an owner-only operation | `agents_never_reach_owner_operations` (property test over all scope sets) |
+| Installer allowed to offer the live USB itself | `test_installer_only_offers_safe_disks` and two more |
+| A made-up `ambar` command or installer flag in the docs | `test_documented_ambar_commands_exist`, `test_documented_tool_flags_exist` |
 
 ### Attacks the tests simulate
 
@@ -75,7 +87,13 @@ Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `
 
 ## Not verified — do not treat as done
 
-1. **The OS image has never been built or booted.** This environment had no access to Fedora's registries and no KVM or QEMU. The first real build, disk image and boot are in `.github/workflows/os-image.yml`. Push to GitHub and check that job.
+1. **The OS images have never been built or booted.** This includes the live ISO, ARM64 and Raspberry Pi images. Specific risks:
+   - The live ISO uses the newer `image-builder generic-iso` path, which is new upstream.
+   - The Pi boot files are copied by our own script.
+   - The live installer has never written a real disk.
+   - ARM64 boot tests run emulated, and check the CLI only.
+
+   The rest of this item applies to all of them. This environment had no access to Fedora's registries and no KVM or QEMU. The first real build, disk image and boot are in `.github/workflows/os-image.yml`. Push to GitHub and check that job.
 2. **macOS:** nothing has run on macOS (FSEvents, launchd, `osascript`, peer credentials). Run `bash scripts/verify.sh` on the Mac.
 3. **Real LLMs:** the AI builder was never called against a real model. Only mock servers that copy each API's request and response shape. Prompt quality with real models is unmeasured.
 4. **Real Plasma:** the Plasma look-and-feel, panel layout script, colour schemes and SDDM background were never loaded in a Plasma session. They are only syntax- and schema-checked.
@@ -93,11 +111,14 @@ Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `
 - **Missed runs:** runs missed while `ambard` was stopped are not caught up.
 - **Path races:** a same-user attacker who can swap a folder for a symlink between the permission check and the file operation could race the check. Using `openat`-style resolution would close this.
 - **Rebranding and recovery:** the Plymouth splash and installer still look like Fedora. There's no recovery partition beyond bootc rollback.
+- **Live USB install needs the network:** the installer pulls the image from GHCR, and the GHCR package must be made public. For offline installs, use the installer ISO.
+- **Live session isn't persistent:** nothing is saved between live boots.
+- **Raspberry Pi device trees:** they're copied when the image is built and not refreshed by kernel updates. Pi 5 isn't supported.
 
 ## Next steps, in order
 
-1. Push the repo. Make the `ci` and `os-image` workflows green, and fix whatever the first real image build and boot turns up.
+1. Push the repo. Make the `ci`, `docs` and `os-image` workflows green, and fix whatever the first real image build and boot turns up. Turn on GitHub Pages (source: GitHub Actions) and Discussions, and make the `ambar-os` package public.
 2. Run `scripts/verify.sh` on the Mac.
-3. Boot the ISO on one real laptop. Fill in the hardware table in `docs/os-image.md`.
+3. Write the live ISO to a USB stick and boot one real laptop. Run `ambar-hwreport` and add the first row to `docs/hardware.md`. Then install from the live session.
 4. Try `ambar ai create` with a real API key or a local Ollama model, and tune the prompt.
 5. Fuzz the parsers, add cosign signing for images, and write an SELinux module for `ambard`.

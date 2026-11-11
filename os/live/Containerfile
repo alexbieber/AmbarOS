@@ -1,0 +1,41 @@
+# Ambar OS — live image: boots from a USB stick or DVD without installing.
+#
+# Built ON TOP of the normal Ambar OS image, so the live system is exactly the
+# OS you would install, plus what a live medium needs:
+#   - dracut "dmsquash-live" so the initramfs can boot from a squashfs on the ISO
+#   - shim/GRUB EFI binaries that image-builder puts on the ISO
+#   - a passwordless "liveuser", logged straight into Plasma
+#   - an ISO label and boot menu (/usr/lib/image-builder/bootc/iso.yaml)
+#
+#   os/build.sh live-iso      # → output/live/…iso
+#
+# Never use this image as an update source for installed systems: it contains
+# a passwordless account. Installed systems track localhost/ambar-os / GHCR.
+
+ARG BASE=localhost/ambar-os:latest
+FROM ${BASE}
+
+RUN dnf -y install --setopt=install_weak_deps=False \
+        dracut-live squashfs-tools xorriso isomd5sum grub2-tools \
+        'grub2-efi-*-cdboot' \
+    && if [ "$(uname -m)" = x86_64 ]; then dnf -y install grub2-pc-modules; fi \
+    && dnf clean all
+
+# EFI binaries where image-builder expects them.
+RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
+
+COPY os/live/files/ /
+COPY --chmod=0755 os/live/installer/ambar_install.py /usr/bin/ambar-install
+# ARM64 serial console is ttyAMA0.
+RUN if [ "$(uname -m)" = aarch64 ]; then \
+      sed -i 's/console=ttyS0,115200n8/console=ttyAMA0,115200n8/' /usr/lib/image-builder/bootc/iso.yaml; fi
+
+# Rebuild the initramfs with the live modules.
+RUN set -xe; kver=$(ls /usr/lib/modules | head -n1); \
+    env DRACUT_NO_XATTR=1 dracut -vf "/usr/lib/modules/$kver/initramfs.img" "$kver" \
+    && lsinitrd "/usr/lib/modules/$kver/initramfs.img" | grep -q dmsquash-live
+
+# Services that only make sense on an installed, bootc-managed system.
+RUN systemctl mask bootloader-update.service bootc-fetch-apply-updates.timer \
+    && systemctl enable ambar-live-setup.service \
+    && chmod 0440 /etc/sudoers.d/ambar-live && visudo -cf /etc/sudoers.d/ambar-live

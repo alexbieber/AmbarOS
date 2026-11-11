@@ -1,0 +1,2 @@
+# bootc-image-builder config for the Raspberry Pi SD-card image.
+# No users here on purpose: the account is created on first boot (plasma-setup).
