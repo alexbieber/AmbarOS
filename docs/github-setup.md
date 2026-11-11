@@ -10,8 +10,8 @@ The repository is set up for **`github.com/alexbieber/AmbarOS`**. If you use ano
 2. In Cursor: **File → Open Folder…** and choose `ambar-os`.
 3. Cursor reads **`AGENTS.md`** and the rules in **`.cursor/rules/`** automatically. They tell the AI what the project is, how it's built and tested, and the rules it must follow. You don't need to set anything up. To check, open **Cursor Settings → Rules**: the project rules are listed there.
 
-!!! tip "Ask Cursor to check before you push"
-    In the chat, try: *"Read AGENTS.md, then check the repo is ready to push to GitHub: nothing from output/, target/ or site/ is tracked, no secrets, no file over 50 MB."*
+!!! tip "Let Cursor do it"
+    The repo has a step-by-step playbook for Cursor, [`CURSOR.md`](https://github.com/alexbieber/AmbarOS/blob/main/CURSOR.md). In Cursor's chat (Agent mode), type: *"Follow CURSOR.md and push the code to GitHub."* It runs the checks, pushes, and tells you which settings to switch on. The steps below are the same thing done by hand.
 
 ## 2. Check before the first push
 

@@ -1,6 +1,6 @@
 # AGENTS.md: working on Ambar OS
 
-Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and for people new to the repo. Read this before changing anything. Topic-specific rules are in `.cursor/rules/`.
+Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and for people new to the repo. Read this before changing anything. Topic-specific rules are in `.cursor/rules/`. To publish to GitHub, follow [`CURSOR.md`](CURSOR.md).
 
 ## What this project is
 

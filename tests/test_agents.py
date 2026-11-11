@@ -49,3 +49,16 @@ def test_features_list_matches_status_marks():
     for unproven in ["Secure Boot", "Firefox", "real model", "touchpad"]:
         line = next(l for l in features.splitlines() if unproven.lower() in l.lower())
         assert "⚠️" in line, f"FEATURES.md overclaims: {line}"
+
+
+def test_cursor_playbook_is_accurate():
+    text = (ROOT / "CURSOR.md").read_text()
+    # Every repo file the playbook names must exist.
+    for f in re.findall(r"`((?:docs|scripts|tests|os)/[\w./-]+\.\w+)`", text):
+        assert (ROOT / f).exists(), f"CURSOR.md names a missing file: {f}"
+    # Safety rules that must stay in it.
+    for rule in ["Never force-push", "Do **not** run `git init`", "Never write the token anywhere"]:
+        assert rule in text, rule
+    assert "git push -u origin main" in text
+    rule = (ROOT / ".cursor/rules/00-project.mdc").read_text()
+    assert "CURSOR.md" in rule and "CURSOR.md" in (ROOT / "AGENTS.md").read_text()

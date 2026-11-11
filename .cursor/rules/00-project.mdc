@@ -15,4 +15,6 @@ Ground rules, enforced in review:
 4. Every behaviour change gets a test; user-visible changes update `docs/`.
 5. No secrets in the repo, not even for tests.
 
+When asked to push, publish or put the code on GitHub, follow `CURSOR.md` step by step (checks, push, settings, README and video).
+
 Run `bash scripts/verify.sh` before saying a change is done. Never commit `target/`, `output/` or `site/`.

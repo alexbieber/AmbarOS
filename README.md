@@ -259,7 +259,7 @@ Details: [Architecture](docs/architecture.md) · [Security policy](SECURITY.md) 
 
 - **Features, with what's proven:** [FEATURES.md](FEATURES.md) · **Tour video:** [ambar-os-tour.mp4](docs/media/ambar-os-tour.mp4)
 - **Working with an AI editor (Cursor, Claude Code):** it reads [AGENTS.md](AGENTS.md) and `.cursor/rules/` automatically.
-- **Putting it on GitHub and publishing the ISO:** [Publish on GitHub](docs/github-setup.md)
+- **Putting it on GitHub and publishing the ISO:** [Publish on GitHub](docs/github-setup.md), or in Cursor just say *"Follow CURSOR.md"* ([CURSOR.md](CURSOR.md))
 
 ```sh
 bash scripts/verify.sh            # everything CI checks, plus a live ambard smoke test
