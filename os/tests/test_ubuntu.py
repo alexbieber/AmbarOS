@@ -204,7 +204,7 @@ def fake_live_console(path, good=True, flavor="standard", sec_broken=False):
         out += ["BROWSER_OK falkon"]
         out += [f"WIDGET_OK {w}" for w in ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter",
                                            "org.kde.plasma.kickerdash", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
-        out += ["Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
+        out += ["STYLE_OK", "TERMINAL_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
                 '{"wifi": null, "volume": {"value": 40, "muted": false}}', "SEC_CLI_OK"]
         if flavor == "security":
             out += ["FLAVOR_SECURITY", "SEC_TOOL_OK nmap", "SEC_TOOL_OK nuclei"]
@@ -331,3 +331,11 @@ def test_ambar_ui_ships_with_the_tools():
                 "utils/ambar-clean-app", "utils/ambar-share-app"]:
         src = (repo / "desktop" / app).read_text()
         assert "/usr/lib/ambar/python" in src and "import ambar_ui as ui" in src and "ui.apply(app)" in src, app
+
+
+def test_boot_script_runs_without_an_install_disk():
+    """`set -u` made the plain ISO boot test die on a bare $TARGET_DISK."""
+    script = (U / "test-qemu.sh").read_text()
+    bare = [l for l in script.splitlines() if re.search(r"\$TARGET_DISK\b|\$\{TARGET_DISK\}", l)
+            and "TARGET_DISK:+" not in l and not l.lstrip().startswith("#")]
+    assert not bare, "use ${TARGET_DISK:-} (or :+ / :?) so the ISO test works without a disk"

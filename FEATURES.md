@@ -32,13 +32,16 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | Menu bar | Ambar menu, the active app's name, the app's own menus, status icons, Control Center, clock | ✅ |
 | Ambar menu | About This Computer, System Settings, Ambar Store, Automations, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out | ✅ |
 | Global app menus | Files, Terminal and other apps show their menus in the menu bar | ✅ seen with Files |
-| Control Center | Wi-Fi, Bluetooth, Airplane mode, Do Not Disturb, dark mode, Night Light, brightness and volume sliders, screenshot | ✅ reads real Wi-Fi, volume and brightness in the VM · ⚠️ Bluetooth and Wi-Fi switching need hardware |
-| Dock | Floating, centred, with pinned apps, running indicators and Trash | ✅ |
+| Control Center | macOS-style modules: Wi-Fi, Bluetooth, Airplane mode, Do Not Disturb, dark mode, Night Light, Display and Sound sliders, screenshot | ✅ reads real Wi-Fi, volume and brightness in the VM · ⚠️ Bluetooth and Wi-Fi switching need hardware |
+| Dock | Floating, rounded and frosted, centred, with pinned apps, soft highlights for running apps, and Trash | ✅ |
 | Launchpad | Full-screen grid of every app | ✅ |
 | Spotlight-style search | Meta+Space or Alt+Space finds apps, files, settings and automations | ✅ |
 | Mission Control | All windows at a glance (Meta+W or the top-left screen corner) | ✅ |
 | Window buttons | Red, yellow and green traffic lights on the left | ✅ |
 | Light and dark | One switch changes colours, panels, icons and window frames | ✅ |
+| Ambar Plasma Style | Translucent menu bar; rounded popups, menus and tooltips with soft shadows; one style for light and dark | ✅ seen in the built desktop · ⚠ blur needs a real GPU |
+| Terminal | Ambar colours (readable in every colour), JetBrains Mono, roomy margins | ✅ |
+| Start-up screen | Ambar logo and progress line instead of KDE's | ✅ renders · ⚠ not yet seen at a real boot |
 | Crisp, consistent text | Inter everywhere, greyscale antialiasing with slight hinting (like macOS); GTK apps (Firefox, GIMP…) use the same font, icons and left-hand window buttons | ✅ font settings checked · ⚠️ not yet seen in a booted image |
 | Touchpad gestures | Plasma's three- and four-finger gestures | ⚠️ needs a touchpad |
 

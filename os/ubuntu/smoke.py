@@ -20,7 +20,10 @@ LIVE_USER = "ambar"
 CHECKS = r"""
 echo __BEGIN__
 grep -E '^(NAME|PRETTY_NAME|ID|ID_LIKE)=' /etc/os-release
-for i in $(seq 300); do pgrep -x plasmashell >/dev/null && [ -s ~/.config/plasma-org.kde.plasma.desktop-appletsrc ] && break; sleep 2; done
+# Plasma writes its layout bit by bit; wait for the last panel (the Dock), not just the first lines.
+for i in $(seq 300); do pgrep -x plasmashell >/dev/null && grep -qs "plugin=org.kde.plasma.trash" ~/.config/plasma-org.kde.plasma.desktop-appletsrc && break; sleep 2; done
+echo "--- splash"; journalctl --user -b --no-pager -o short-monotonic -u plasma-ksplash 2>/dev/null | tail -6
+echo "--- plasmashell start"; journalctl --user -b --no-pager -o short-monotonic -u plasma-plasmashell 2>/dev/null | head -3
 echo "--- sessions"; loginctl list-sessions --no-legend
 echo "--- plasma config"; ls ~/.config | grep -E "plasma|kdeglobals|kwin" | tr '\n' ' '; echo
 echo "--- session log"; journalctl --user -b --no-pager -o cat 2>/dev/null | grep -iE "plasmashell|kwin_wayland|error|fail" | tail -25
@@ -38,6 +41,8 @@ for w in os.ambar.menu os.ambar.appname os.ambar.controlcenter org.kde.plasma.ki
   grep -rqs "plugin=$w" /home/*/.config/plasma-org.kde.plasma.desktop-appletsrc && echo "WIDGET_OK $w"
 done
 grep -h '^\(Name\|Exec\)=' /usr/share/applications/org.kde.discover.desktop | head -2
+grep -qs '^name=ambar' ~/.config/plasmarc /etc/xdg/plasmarc && [ -f /usr/share/plasma/desktoptheme/ambar/metadata.json ] && echo STYLE_OK
+[ -f /usr/share/konsole/Ambar.profile ] && grep -qs Ambar.profile /etc/xdg/konsolerc && echo TERMINAL_OK
 flatpak remotes --system 2>/dev/null | grep -q flathub && echo FLATHUB_OK
 systemctl --user is-active ambard && echo AMBARD_OK
 ambar-control-center status
@@ -63,6 +68,8 @@ EXPECT = [
     ("global app menus", r"^WIDGET_OK org\.kde\.plasma\.appmenu"),
     ("launchpad", r"^WIDGET_OK org\.kde\.plasma\.kickerdash"),
     ("dock", r"^WIDGET_OK org\.kde\.plasma\.icontasks"),
+    ("ambar plasma style", r"^STYLE_OK"),
+    ("ambar terminal", r"^TERMINAL_OK"),
     ("browser", r"^BROWSER_OK "),
     ("ambar store", r"^Name=Ambar Store"),
     ("installer", r"^APP_OK calamares"),

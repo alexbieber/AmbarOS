@@ -29,6 +29,25 @@ add(bar, "os.ambar.appname");
 add(bar, "org.kde.plasma.appmenu");
 add(bar, "org.kde.plasma.panelspacer");
 var tray = add(bar, "org.kde.plasma.systemtray");
+if (tray) {
+    // Like macOS: only status that matters in the bar. Sound, brightness and displays live in
+    // the Control Center, so they're left out here. "knownItems" lists every tray widget, so
+    // Plasma doesn't switch the others back on as "new".
+    tray.currentConfigGroup = ["General"];
+    tray.writeConfig("extraItems", [
+        "org.kde.plasma.networkmanagement", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
+        "org.kde.plasma.notifications", "org.kde.plasma.devicenotifier", "org.kde.plasma.mediacontroller",
+        "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.cameraindicator",
+        "org.kde.plasma.printmanager", "org.kde.kdeconnect"].join(","));
+    tray.writeConfig("knownItems", [
+        "org.kde.kscreen", "org.kde.plasma.addons.katesessions", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
+        "org.kde.plasma.brightness", "org.kde.plasma.cameraindicator", "org.kde.plasma.clipboard",
+        "org.kde.plasma.devicenotifier", "org.kde.plasma.diskquota", "org.kde.plasma.keyboardindicator",
+        "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.mediacontroller",
+        "org.kde.plasma.networkmanagement", "org.kde.plasma.notifications", "org.kde.plasma.printmanager",
+        "org.kde.plasma.trash", "org.kde.plasma.volume", "org.kde.plasma.weather", "org.kde.kdeconnect",
+        "org.kde.kupapplet", "org.kde.plasma.vault", "org.kde.plasma.wacomtablet"].join(","));
+}
 add(bar, "os.ambar.controlcenter");
 var clock = add(bar, "org.kde.plasma.digitalclock");
 if (clock) {

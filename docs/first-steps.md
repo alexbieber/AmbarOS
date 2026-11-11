@@ -12,7 +12,7 @@ A tour of the desktop, how to install apps, and your first automation.
 | Menu bar | **Menu bar**: the name and menus of the app in front | Apps put their File, Edit, View… menus here |
 | Control Center | **Control Center**: the toggle icon next to the clock | Wi-Fi, Bluetooth, Airplane Mode, Do Not Disturb, Dark Mode, Night Light, display brightness, sound |
 | Spotlight | **Search** | **Meta+Space** (or Alt+Space): apps, files, settings, calculations, automations |
-| Dock | **Dock** at the bottom | Click to open; running apps have a mark; right-click to pin |
+| Dock | **Dock** at the bottom | Click to open; running apps sit on a soft highlight, the one in front a stronger one; right-click to pin |
 | Launchpad | **Launchpad**: the grid icon at the left of the Dock | All apps A–Z, favourites, categories, search |
 | Mission Control | **Overview** | **Meta+W**, or a four-finger swipe up on a touchpad |
 | Finder | **Files** (Dolphin) | Tabs, split view, previews, network places |

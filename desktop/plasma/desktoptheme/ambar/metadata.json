@@ -1,0 +1,18 @@
+{
+  "KPlugin": {
+    "Id": "ambar",
+    "Name": "Ambar",
+    "Description": "Frosted panels, rounded popups and a pill-style dock",
+    "Authors": [
+      {
+        "Name": "Ambar Singh"
+      }
+    ],
+    "Category": "",
+    "EnabledByDefault": true,
+    "License": "LGPL",
+    "Version": "0.2",
+    "Website": "https://github.com/alexbieber/AmbarOS"
+  },
+  "X-Plasma-API": "5.0"
+}

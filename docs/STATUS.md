@@ -64,6 +64,22 @@ _Last updated: 2026-11-11_
 - ✅ The font settings (`/etc/fonts/local.conf`: greyscale antialiasing, slight hinting, Inter for sans-serif) were loaded by fontconfig here and resolve as intended.
 - ⚠ GTK apps using Breeze and the same font, and the new font settings, haven't been seen in a booted image yet; that needs the next ISO build.
 
+**Desktop look, second pass** (`desktop/plasma/desktoptheme.py`, the Control Center, the terminal and the start-up screen):
+
+- ✅ Run in the real Plasma 6.6 desktop built from this recipe (X11 on a virtual screen, `os/ubuntu/desktop-shots.sh`) and checked by eye in light and dark:
+  - the Dock is rounded and frosted, with soft highlights behind running apps
+  - the menu bar, popups, menus and tooltips use the new Ambar Plasma Style
+  - the Control Center has macOS-style grouped modules
+  - the terminal uses Ambar colours and JetBrains Mono
+  - the status area no longer shows sound, brightness and display icons (they live in the Control Center)
+- The Control Center screenshot was taken with a stand-in helper that reports Wi-Fi, Bluetooth, sound and a backlight, because the virtual screen has none. The modules for those only appear on computers that have them.
+- ✅ Tests: every piece of every frame is present (including blur masks and shadows), the committed style matches its generator, terminal colours pass WCAG AA, and the start-up screen loads.
+- ✅ The rebuilt ISO passed the automatic boot test (17 checks, including the new style and terminal), and its live session on Wayland showed the new menu bar and Dock (`docs/images/os/booted/desktop.jpg`).
+- Under software emulation the session took about 7 minutes to draw. The start-up screen ran, but its service hit Plasma's 40-second limit and was stopped. Plasma's own splash runs under the same limit, so this is expected on slow emulation; it hasn't been seen on real hardware.
+- The boot test used to check the layout before Plasma finished writing it (a race that failed once here); it now waits for the Dock.
+- ⚠ Blur behind panels needs a GPU compositor with blur, which wasn't available in these runs.
+- ⚠ Launchpad is still Plasma's own full-screen launcher.
+
 **Found by booting it, and fixed in the recipe:**
 
 - **Black screen in the VM:** QEMU's emulated `-cpu max` crashed Mesa's software renderer. The test now emulates a plain x86-64-v2 CPU.

@@ -144,6 +144,25 @@ add(bar, "os.ambar.appname");
 add(bar, "org.kde.plasma.appmenu");
 add(bar, "org.kde.plasma.panelspacer");
 var tray = add(bar, "org.kde.plasma.systemtray");
+if (tray) {
+    // Like macOS: only status that matters in the bar. Sound, brightness and displays live in
+    // the Control Center, so they're left out here. "knownItems" lists every tray widget, so
+    // Plasma doesn't switch the others back on as "new".
+    tray.currentConfigGroup = ["General"];
+    tray.writeConfig("extraItems", [
+        "org.kde.plasma.networkmanagement", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
+        "org.kde.plasma.notifications", "org.kde.plasma.devicenotifier", "org.kde.plasma.mediacontroller",
+        "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.cameraindicator",
+        "org.kde.plasma.printmanager", "org.kde.kdeconnect"].join(","));
+    tray.writeConfig("knownItems", [
+        "org.kde.kscreen", "org.kde.plasma.addons.katesessions", "org.kde.plasma.battery", "org.kde.plasma.bluetooth",
+        "org.kde.plasma.brightness", "org.kde.plasma.cameraindicator", "org.kde.plasma.clipboard",
+        "org.kde.plasma.devicenotifier", "org.kde.plasma.diskquota", "org.kde.plasma.keyboardindicator",
+        "org.kde.plasma.keyboardlayout", "org.kde.plasma.manage-inputmethod", "org.kde.plasma.mediacontroller",
+        "org.kde.plasma.networkmanagement", "org.kde.plasma.notifications", "org.kde.plasma.printmanager",
+        "org.kde.plasma.trash", "org.kde.plasma.volume", "org.kde.plasma.weather", "org.kde.kdeconnect",
+        "org.kde.kupapplet", "org.kde.plasma.vault", "org.kde.plasma.wacomtablet"].join(","));
+}
 add(bar, "os.ambar.controlcenter");
 var clock = add(bar, "org.kde.plasma.digitalclock");
 if (clock) {
@@ -230,7 +249,7 @@ SingleClick=false
 Theme={"Papirus-Dark" if dark else "Papirus"}
 
 [plasmarc][Theme]
-name={"breeze-dark" if dark else "default"}
+name=ambar
 
 [kwinrc][org.kde.kdecoration2]
 library=org.kde.kwin.aurorae.v2
@@ -239,10 +258,96 @@ ButtonsOnLeft=XIA
 ButtonsOnRight=
 
 [KSplash][KSplash]
-Theme=org.kde.breeze.desktop
+Theme=os.ambar.desktop{".dark" if dark else ""}
 
 [kcminputrc][Mouse]
 cursorTheme=breeze_cursors
+"""
+
+
+# Terminal colours: warm, low-glare, readable (every ANSI colour ≥ 4.5:1 on the background).
+TERMINAL = {
+    "light": {"bg": "#FBF8F3", "fg": "#1F1A15",
+              "ansi": ["#3B332A", "#B4362A", "#1F7A52", "#8F5C00", "#2F5E99", "#86469C", "#16737A", "#6F655A"],
+              "bright": ["#6F655A", "#C9473A", "#21805A", "#9C6500", "#3A6EB0", "#9A55B0", "#1A8088", "#1F1A15"]},
+    "dark": {"bg": "#1B1713", "fg": "#F4EEE6",
+             "ansi": ["#3B332A", "#F07B6F", "#62C796", "#E8B54E", "#7FA7D9", "#C792EA", "#5FC4C0", "#D9D0C4"],
+             "bright": ["#8A7E71", "#FF9A8F", "#85DDB0", "#F5CD73", "#A3C2E8", "#D9B0F2", "#86D9D5", "#FFFFFF"]},
+}
+
+
+def konsole_scheme(mode: str) -> str:
+    t = TERMINAL[mode]
+    out = [f"[General]\nDescription=Ambar {mode.capitalize()}\nOpacity=1\nBlur=false\n"]
+    for name, col in (("Background", t["bg"]), ("BackgroundIntense", t["bg"]), ("BackgroundFaint", t["bg"]),
+                      ("Foreground", t["fg"]), ("ForegroundIntense", t["fg"]), ("ForegroundFaint", t["ansi"][7])):
+        out.append(f"[{name}]\nColor={kde(col)}\n")
+    for i in range(8):
+        out.append(f"[Color{i}]\nColor={kde(t['ansi'][i])}\n")
+        out.append(f"[Color{i}Intense]\nColor={kde(t['bright'][i])}\n")
+        out.append(f"[Color{i}Faint]\nColor={kde(t['ansi'][i])}\n")
+    return "\n".join(out)
+
+
+KONSOLE_PROFILE = """[Appearance]
+ColorScheme=AmbarDark
+Font=JetBrains Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+UseFontLineChararacters=true
+
+[Cursor Options]
+CursorShape=1
+
+[General]
+Name=Ambar
+Parent=FALLBACK/
+TerminalCenter=true
+TerminalMargin=14
+
+[Scrolling]
+ScrollBarPosition=2
+"""
+
+# The start-up screen: the Ambar mark on the desktop's background, with a thin progress line.
+SPLASH_QML = """import QtQuick
+
+Rectangle {
+    id: root
+    color: "%(bg)s"
+    property int stage   // set by ksplash, 1 … 6
+
+    Image {
+        id: mark
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: -height * 0.25
+        width: Math.round(Math.min(root.width, root.height) * 0.09)
+        height: width
+        sourceSize.width: width * 2
+        sourceSize.height: height * 2
+        source: "images/ambar-mark.svg"
+        smooth: true
+        opacity: 0
+        Component.onCompleted: opacity = 1
+        Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+    }
+
+    Rectangle {
+        id: track
+        anchors.top: mark.bottom
+        anchors.topMargin: mark.height * 0.7
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: mark.width * 1.6
+        height: 4
+        radius: 2
+        color: "%(track)s"
+        Rectangle {
+            height: parent.height
+            radius: 2
+            color: "%(fill)s"
+            width: parent.width * Math.min(1, Math.max(0.08, root.stage / 6))
+            Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+        }
+    }
+}
 """
 
 
@@ -339,6 +444,19 @@ def main() -> int:
         (root / "metadata.json").write_text(json.dumps(lnf_metadata(mode), indent=2) + "\n")
         (root / "contents" / "defaults").write_text(defaults(mode))
         (root / "contents" / "layouts" / "org.kde.plasma.desktop-layout.js").write_text(LAYOUT_JS)
+        splash = root / "contents" / "splash"
+        (splash / "images").mkdir(parents=True)
+        p = PALETTE[mode]
+        (splash / "Splash.qml").write_text(SPLASH_QML % {
+            "bg": "#F7F4EF" if mode == "light" else "#15120F",
+            "track": "#E3DACD" if mode == "light" else "#3B332A", "fill": p["accent"]})
+        shutil.copy(HERE.parent / "brand" / "ambar-mark.svg", splash / "images" / "ambar-mark.svg")
+
+    konsole = HERE / "konsole"
+    konsole.mkdir(exist_ok=True)
+    for mode in ("light", "dark"):
+        (konsole / f"Ambar{mode.capitalize()}.colorscheme").write_text(konsole_scheme(mode))
+    (konsole / "Ambar.profile").write_text(KONSOLE_PROFILE)
 
     wp = HERE / "wallpapers" / "Ambar"
     (wp / "contents" / "images").mkdir(parents=True, exist_ok=True)
@@ -369,6 +487,9 @@ def main() -> int:
         for fg, bg in [("text", "window"), ("text", "view"), ("muted", "view"),
                        ("on_accent", "accent"), ("tooltip_text", "tooltip")]:
             print(f"{mode:5} {fg:>12} on {bg:<8} {contrast(p[fg], p[bg]):5.2f}")
+    for mode, t in TERMINAL.items():
+        worst = min(contrast(c, t["bg"]) for c in t["ansi"][1:] + [t["fg"]])
+        print(f"{mode:5} terminal: lowest colour contrast {worst:4.2f}")
     return 0
 
 

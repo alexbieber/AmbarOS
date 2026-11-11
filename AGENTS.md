@@ -18,7 +18,7 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `os/ubuntu/` | **Main OS build**: `build.sh`, `packages.txt`, `exclude.txt`, `hooks/*.chroot`, `overlay/` (files copied into the image), `iso/grub.cfg`, `test-qemu.sh`, `smoke.py`, `desktop-shots.sh` | bash, Python |
 | `os/` (rest) | Experimental **atomic edition** (Fedora Kinoite + bootc, ARM64, Raspberry Pi) and shared test helpers (`smoke_test.py`) | Containerfile, bash |
 | `os/tests/` | Tests for both OS editions (static checks of the recipe, plus the boot harness) | pytest |
-| `desktop/plasma/` | macOS-style shell: `generate.py` (layout + defaults), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
+| `desktop/plasma/` | macOS-style shell: `generate.py` (layout, defaults, terminal colours, start-up screen), `desktoptheme.py` (the Ambar Plasma Style: panels, popups, Dock highlights), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
 | `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
 | `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
@@ -50,7 +50,7 @@ os/ubuntu/test-qemu.sh output/ubuntu/ambar-os-0.2-amd64.iso                 # au
 os/ubuntu/test-qemu.sh output/ubuntu/ambar-os-0.2-amd64.iso --interactive   # look at it yourself
 
 # Re-generate the shell defaults and window decorations after editing their generators
-python3 desktop/plasma/generate.py && python3 desktop/plasma/aurorae.py
+python3 desktop/plasma/generate.py && python3 desktop/plasma/desktoptheme.py && python3 desktop/plasma/aurorae.py
 ```
 
 After changing anything in `desktop/plasma/` or `os/ubuntu/hooks|overlay`, rebuilding is only `sudo os/ubuntu/build.sh ambar && sudo os/ubuntu/build.sh iso`. The base system is reused.

@@ -17,7 +17,7 @@ SingleClick=false
 Theme=Papirus-Dark
 
 [plasmarc][Theme]
-name=breeze-dark
+name=ambar
 
 [kwinrc][org.kde.kdecoration2]
 library=org.kde.kwin.aurorae.v2
@@ -26,7 +26,7 @@ ButtonsOnLeft=XIA
 ButtonsOnRight=
 
 [KSplash][KSplash]
-Theme=org.kde.breeze.desktop
+Theme=os.ambar.desktop.dark
 
 [kcminputrc][Mouse]
 cursorTheme=breeze_cursors

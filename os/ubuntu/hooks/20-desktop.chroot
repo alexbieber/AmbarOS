@@ -104,7 +104,7 @@ Placement=Centered
 CFG
 cat > /etc/xdg/plasmarc <<'CFG'
 [Theme]
-name=default
+name=ambar
 CFG
 cat > /etc/xdg/kcminputrc <<'CFG'
 [Mouse]
@@ -116,13 +116,22 @@ Image=/usr/share/wallpapers/Ambar/contents/images/3840x2160.png
 CFG
 cat > /etc/xdg/ksplashrc <<'CFG'
 [KSplash]
-Theme=org.kde.breeze.desktop
+Theme=os.ambar.desktop
 CFG
 # Show the search (Spotlight) on Meta+Space as well as Alt+Space.
 install -d /etc/skel/.config
 cat > /etc/skel/.config/kglobalshortcutsrc <<'CFG'
 [services][org.kde.krunner.desktop]
 _launch=Meta+Space\tAlt+Space\tAlt+F2\tSearch
+CFG
+# Terminal: Ambar colours, JetBrains Mono, roomy margins, no scroll bar (Konsole's own files
+# are in /usr/share/konsole, installed by build.sh).
+cat > /etc/xdg/konsolerc <<'CFG'
+[Desktop Entry]
+DefaultProfile=Ambar.profile
+
+[TabBar]
+TabBarVisibility=ShowTabBarWhenNeeded
 CFG
 # Dolphin like Finder: single window, sidebar, previews, folders first.
 cat > /etc/xdg/dolphinrc <<'CFG'
@@ -141,6 +150,7 @@ cat > /etc/sddm.conf.d/90-ambar.conf <<'CFG'
 [Theme]
 Current=breeze
 CursorTheme=breeze_cursors
+Font=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 CFG
 install -d /usr/share/sddm/themes/breeze
 cat > /usr/share/sddm/themes/breeze/theme.conf.user <<'CFG'

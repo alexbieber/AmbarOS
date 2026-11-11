@@ -31,7 +31,7 @@ MEM="${MEM:-4096}"; SMP="${SMP:-$(nproc)}"
 QEMU=(qemu-system-x86_64 -machine "q35,accel=$ACCEL" -cpu "$CPU" -m "$MEM" -smp "$SMP"
   -drive "if=pflash,format=raw,readonly=on,file=$FW" -drive "if=pflash,format=raw,file=$WORK/vars.fd"
   "${MEDIA[@]}" ${TARGET_DISK:+-drive "file=$TARGET_DISK,if=virtio,format=qcow2"} -nic user,model=virtio-net-pci -device "${GPU:-virtio-vga}" -device qemu-xhci -device usb-tablet)
-echo "booting ${ISO/#disk/$TARGET_DISK} (accel=$ACCEL, ${MEM} MB, $SMP CPUs)"
+echo "booting ${ISO/#disk/${TARGET_DISK:-}} (accel=$ACCEL, ${MEM} MB, $SMP CPUs)"
 if [ "$MODE" = --interactive ]; then exec "${QEMU[@]}" -display gtk; fi
 "${QEMU[@]}" -display none -serial "unix:$WORK/serial.sock,server,nowait" -monitor "unix:$WORK/mon.sock,server,nowait" &
 QPID=$!
