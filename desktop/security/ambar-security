@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Ambar Security: pick security tool tiers and categories to install (Ambar's kali-tweaks).
+
+The window only builds an `ambar-sec` command line; the work runs in a Konsole
+window, so you see every step and type your password there, not in this app.
+"""
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QGridLayout, QGroupBox, QHBoxLayout,
+                               QHeaderView, QLabel, QLineEdit, QMainWindow, QPushButton, QRadioButton,
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+
+
+def _cli():
+    path = shutil.which("ambar-sec") or str(Path(__file__).resolve().parent / "ambar-sec")
+    loader = importlib.machinery.SourceFileLoader("ambar_sec", path)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("ambar_sec", loader))
+    loader.exec_module(mod)
+    return mod, path
+
+
+SOURCES = {"apt": "Ubuntu", "pipx": "Python (isolated)", "github": "Release binary (verified)", "kali": "Kali container"}
+TIER_TEXT = {
+    "none": "No tier: only the categories or tools ticked below",
+    "top10": "Top 10: nmap, Wireshark, Metasploit, Burp Suite, Hydra, John, sqlmap, NetExec…",
+    "default": "Default: everything in Kali's standard ISO, with modern replacements (recommended)",
+    "large": "Large: Default plus Kali's large set",
+    "everything": "Everything: Default plus every Kali tool (a full Kali install is about 36 GB)",
+}
+
+
+class Window(QMainWindow):
+    def __init__(self, runner=None, first_run: bool = False):
+        super().__init__()
+        self.sec, self.cli = _cli()
+        self.cat = self.sec.load(self.sec.CATALOG)
+        self.runner = runner or self.run_in_terminal
+        self.setWindowTitle("Ambar Security")
+        self.setWindowIcon(QIcon.fromTheme("ambar-security"))
+        self.resize(1000, 720)
+        root = QWidget()
+        v = QVBoxLayout(root)
+        head = QLabel("<h2>Security tools</h2>Kali's tool set, from modern sources: Ubuntu packages, isolated "
+                      "Python tools, checksum-verified binaries and a Kali container for the rest.<br>"
+                      f"<b>{self.sec.NOTICE}</b>")
+        if first_run:
+            head.setText(head.text() + "<p><b>Welcome to Ambar OS Security.</b> Kali's Ubuntu, Python and binary "
+                         "tools are already installed. Click <b>Install</b> to add the rest (Metasploit, Burp Suite, "
+                         "Responder, WPScan…) from an isolated Kali container. That downloads several GB.</p>")
+        head.setWordWrap(True)
+        v.addWidget(head)
+
+        tiers = QGroupBox("Tier")
+        tv = QVBoxLayout(tiers)
+        self.tier = QButtonGroup(self)
+        for key, text in TIER_TEXT.items():
+            b = QRadioButton(text)
+            b.setProperty("tier", key)
+            b.setChecked(key == "default")
+            self.tier.addButton(b)
+            tv.addWidget(b)
+        v.addWidget(tiers)
+
+        cats = QGroupBox("Add categories")
+        grid = QGridLayout(cats)
+        self.cats: dict[str, QCheckBox] = {}
+        for i, (key, title) in enumerate(c for c in self.cat["categories"].items() if c[0] != "support"):
+            box = QCheckBox(title.replace("&", "&&"))  # "&" would mark a shortcut key
+            self.cats[key] = box
+            grid.addWidget(box, i // 3, i % 3)
+        v.addWidget(cats)
+
+        self.filter = QLineEdit(placeholderText="Search tools…")
+        self.filter.textChanged.connect(self.apply_filter)
+        v.addWidget(self.filter)
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["", "Tool", "Category", "Source", "What it does"])
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.table.verticalHeader().hide()
+        self.fill()
+        v.addWidget(self.table, 1)
+
+        buttons = QHBoxLayout()
+        self.install_btn = QPushButton(QIcon.fromTheme("run-install"), "Install")
+        self.install_btn.clicked.connect(self.install)
+        update = QPushButton(QIcon.fromTheme("system-software-update"), "Update installed tools")
+        update.clicked.connect(lambda: self.runner(["update"]))
+        shell = QPushButton(QIcon.fromTheme("utilities-terminal"), "Open Kali shell")
+        shell.clicked.connect(lambda: self.runner(["shell"]))
+        self.summary = QLabel()
+        buttons.addWidget(self.summary, 1)
+        for b in (shell, update, self.install_btn):
+            buttons.addWidget(b)
+        v.addLayout(buttons)
+        self.setCentralWidget(root)
+        self.tier.buttonToggled.connect(lambda *_: self.refresh_summary())
+        for box in self.cats.values():
+            box.toggled.connect(lambda *_: self.refresh_summary())
+        self.table.itemChanged.connect(lambda *_: self.refresh_summary())
+        self.refresh_summary()
+
+    def fill(self) -> None:
+        cache: dict = {}
+        tools = [t for t in self.cat["tool"] if t["cat"] != "support"]
+        self.table.setRowCount(len(tools))
+        for r, t in enumerate(tools):
+            check = QTableWidgetItem()
+            check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check.setCheckState(Qt.Unchecked)
+            check.setData(Qt.UserRole, t["name"])
+            done = self.sec.installed(t, self.cat, cache) if os.environ.get("AMBAR_SECURITY_NO_PROBE") != "1" else False
+            name = QTableWidgetItem(t["name"] + ("  ✓" if done else ""))
+            about = t["about"] + (f"  (replaces {', '.join(t['replaces'])})" if t["replaces"] else "")
+            for c, item in enumerate([check, name, QTableWidgetItem(self.cat["categories"][t["cat"]]),
+                                      QTableWidgetItem(SOURCES[t["src"]]), QTableWidgetItem(about)]):
+                if c:
+                    item.setFlags(Qt.ItemIsEnabled)
+                self.table.setItem(r, c, item)
+        self.table.resizeColumnsToContents()
+
+    def apply_filter(self, text: str) -> None:
+        for r in range(self.table.rowCount()):
+            row = " ".join(self.table.item(r, c).text() for c in range(1, 5)).lower()
+            self.table.setRowHidden(r, text.lower() not in row)
+
+    def targets(self) -> list[str]:
+        tier = self.tier.checkedButton().property("tier")
+        out = [] if tier == "none" else [tier]
+        out += [k for k, box in self.cats.items() if box.isChecked()]
+        out += [self.table.item(r, 0).data(Qt.UserRole) for r in range(self.table.rowCount())
+                if self.table.item(r, 0).checkState() == Qt.Checked]
+        return out
+
+    def refresh_summary(self) -> None:
+        targets = self.targets()
+        if not targets:
+            self.summary.setText("Choose a tier, a category or tools.")
+            self.install_btn.setEnabled(False)
+            return
+        tools, meta = self.sec.resolve(self.cat, targets)
+        kali = sum(t["src"] == "kali" for t in tools)
+        self.summary.setText(f"{len(tools)} tools ({kali} from the Kali container)"
+                             + (f" + {', '.join(meta)}" if meta else ""))
+        self.install_btn.setEnabled(True)
+
+    def install(self) -> None:
+        self.runner(["install", *self.targets()])
+
+    def run_in_terminal(self, args: list[str]) -> None:
+        cmd = " ".join(shlex.quote(a) for a in [self.cli, *args])
+        term = shutil.which("konsole")
+        argv = [term, "--hold", "-e", "sh", "-c", cmd] if term else ["x-terminal-emulator", "-e", "sh", "-c", cmd]
+        subprocess.Popen(argv)
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ambar Security")
+    app.setDesktopFileName("os.ambar.Security")
+    w = Window(first_run="--first-run" in sys.argv)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

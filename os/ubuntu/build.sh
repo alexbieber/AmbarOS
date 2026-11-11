@@ -5,6 +5,7 @@
 #   sudo os/ubuntu/build.sh ambar     # (re)apply the Ambar layer to the rootfs
 #   sudo os/ubuntu/build.sh iso       # rootfs → $OUT/ambar-os-<version>-amd64.iso
 #   sudo os/ubuntu/build.sh all       # everything
+#   sudo FLAVOR=security os/ubuntu/build.sh all   # Ambar OS Security (Kali's tools)
 #
 # Needs: debootstrap squashfs-tools xorriso grub-efi-amd64-bin grub-pc-bin mtools
 #        dosfstools, root, and network access to the Ubuntu archive.
@@ -20,6 +21,15 @@ OUT="${OUT:-$REPO/output/ubuntu}"
 ROOT="$WORK/rootfs"
 VERSION="${VERSION:-0.2}"
 BROWSER="${BROWSER:-auto}"
+# FLAVOR=security builds "Ambar OS Security": the same OS with Kali's default tool
+# set preinstalled (Ubuntu, pipx and verified binaries; Kali-container tools are
+# added on first use). Every flavour includes ambar-sec and the Security app.
+FLAVOR="${FLAVOR:-standard}"
+case "$FLAVOR" in
+  standard) SUFFIX=""; LABEL="Ambar OS"; VOLID="AMBAR_OS" ;;
+  security) SUFFIX="-security"; LABEL="Ambar OS Security"; VOLID="AMBAR_OS_SEC" ;;
+  *) echo "FLAVOR must be standard or security" >&2; exit 2 ;;
+esac
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 
 log() { printf '\n\033[1;33m== %s\033[0m\n' "$*"; }
@@ -158,19 +168,40 @@ ambar() {
   mkdir -p "$ROOT/usr/share/aurorae/themes"
   cp -r "$REPO"/desktop/plasma/aurorae/* "$ROOT/usr/share/aurorae/themes/"
 
+  log "Ambar Security toolkit (ambar-sec, the Security app, Launchpad menu)"
+  local sec="$REPO/desktop/security"
+  install -Dm755 "$sec/ambar-sec" "$ROOT/usr/bin/ambar-sec"
+  install -Dm755 "$sec/ambar-security" "$ROOT/usr/bin/ambar-security"
+  install -Dm644 "$sec/catalog.toml" "$ROOT/usr/share/ambar/security/catalog.toml"
+  install -Dm644 "$sec/kali-default.txt" "$ROOT/usr/share/ambar/security/kali-default.txt"
+  install -Dm644 "$sec/os.ambar.Security.desktop" "$ROOT/usr/share/applications/os.ambar.Security.desktop"
+  install -Dm644 "$sec/ambar-security.svg" "$ROOT/usr/share/icons/hicolor/scalable/apps/ambar-security.svg"
+  install -Dm644 "$sec/menu/ambar-security.menu" "$ROOT/etc/xdg/menus/applications-merged/ambar-security.menu"
+  install -d "$ROOT/usr/share/desktop-directories"
+  cp "$sec"/menu/*.directory "$ROOT/usr/share/desktop-directories/"
+
   log "Ambar desktop, branding and defaults (overlay + hooks)"
   cp -a "$HERE/overlay/." "$ROOT/"
   for h in "$HERE"/hooks/*.chroot; do
     log "hook $(basename "$h")"
     install -m755 "$h" "$ROOT/tmp/hook"
-    in_root env AMBAR_VERSION="$VERSION" /tmp/hook
+    in_root env AMBAR_VERSION="$VERSION" AMBAR_FLAVOR="$FLAVOR" /tmp/hook
     rm -f "$ROOT/tmp/hook"
   done
   in_root ambar --version
   in_root python3 -c "import ambar_center, ambar_sdk"
+  in_root ambar-sec list --tier top10 >/dev/null
+  if [ "$FLAVOR" = security ]; then
+    log "Security edition: Kali's default tool set (Ubuntu, pipx, verified binaries)"
+    in_root ambar-sec install default --system-only
+    in_root ambar-sec status
+  fi
 }
 
 iso() {
+  # One rootfs per flavour: a security rootfs has the tools installed.
+  local built; built="$(cat "$ROOT/etc/ambar-flavor" 2>/dev/null || echo standard)"
+  [ "$built" = "$FLAVOR" ] || { echo "rootfs in $WORK is the '$built' flavour; use FLAVOR=$built or another WORK" >&2; exit 2; }
   log "clean up rootfs"
   mounts_down
   rm -f "$ROOT/usr/sbin/policy-rc.d"
@@ -187,10 +218,10 @@ iso() {
   mksquashfs "$ROOT" "$stage/casper/filesystem.squashfs" -noappend -comp "${SQUASH_COMP:-zstd}" \
     -Xcompression-level "${SQUASH_LEVEL:-15}" -e boot/grub -wildcards -e 'var/cache/apt/*' -quiet
   du -sx --block-size=1 "$ROOT" | cut -f1 > "$stage/casper/filesystem.size"
-  echo "Ambar OS $VERSION \"Ubuntu 26.04 LTS\" - amd64" > "$stage/.disk/info"
+  echo "$LABEL $VERSION \"Ubuntu 26.04 LTS\" - amd64" > "$stage/.disk/info"
 
   cp "$HERE/iso/grub.cfg" "$stage/boot/grub/grub.cfg"
-  sed -i "s/@VERSION@/$VERSION/g" "$stage/boot/grub/grub.cfg"
+  sed -i "s/@VERSION@/$VERSION/g; s/Ambar OS/$LABEL/g" "$stage/boot/grub/grub.cfg"
   [ -f "$HERE/iso/background.png" ] && cp "$HERE/iso/background.png" "$stage/boot/grub/"
   # GRUB modules and font for the themed menu (gfxterm, png background).
   mkdir -p "$stage/boot/grub/x86_64-efi" "$stage/boot/grub/fonts"
@@ -217,9 +248,9 @@ iso() {
   cat /usr/lib/grub/i386-pc/cdboot.img "$WORK/core.img" > "$stage/boot/grub/bios.img"
 
   mkdir -p "$OUT"
-  local iso="$OUT/ambar-os-$VERSION-amd64.iso"
+  local iso="$OUT/ambar-os$SUFFIX-$VERSION-amd64.iso"
   log "xorriso → $iso"
-  xorriso -as mkisofs -r -V "AMBAR_OS" -o "$iso" -J -joliet-long -l \
+  xorriso -as mkisofs -r -V "$VOLID" -o "$iso" -J -joliet-long -l \
     -iso-level 3 -partition_offset 16 --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
     -append_partition 2 0xef "$efiimg" -appended_part_as_gpt \
     -c /boot.catalog \

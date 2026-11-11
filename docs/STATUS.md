@@ -26,6 +26,18 @@ _Last updated: 2026-11-11_
 - **The installed system starts on its own** (no ISO): UEFI boot, the Ambar login screen with the user created in the installer, password login, the Ambar service and the Welcome. `/etc/os-release` and the console say *Ambar OS 0.2 (based on Ubuntu 26.04.1 LTS)*.
 - ⚠ **Open problem:** on the installed system under emulation (2 CPUs, software rendering), the wallpaper, menu bar and Dock were not drawn within 17 minutes. Plasma has created them (both panels and their widgets are loaded), but they never appear on screen, while the live session draws them in about 8 minutes. Next step: repeat on KVM (the CI workflow) or real hardware to tell a slow-emulation problem from a real bug.
 
+**Security tools (Kali's tool set):**
+
+- The catalogue covers **all 204 packages in Kali's default set** (`kali-tools-top10`, `kali-linux-default`, `kali-linux-headless`): each is installed from a modern source or left out with a written reason (6, such as Chromebook firmware tools). A test enforces this.
+- **Real install on a clean Ubuntu 26.04 system** with `ambar-sec install default --system-only`:
+  - all **151 Ubuntu packages** installed together (1,274 packages with dependencies), with no errors
+  - all **10 pipx tools** installed and run on Python 3.14, NetExec included. NetExec needed a C compiler; it's now a declared dependency.
+  - 24 of 30 sampled tools started cleanly; the other 6 work but exit non-zero for help, or are Kali-container tools.
+  - every network service the install switched on was turned off again: Apache, MySQL, Samba, SNMP, sslh and the **SSH server** that sslh pulls in. A service you had enabled yourself is left alone (tested).
+  - 105 menu launchers in Kali's categories
+- Two PyPI packages didn't work on Python 3.14 (ropper) or install no command (pdfid). Both now come from the Kali container.
+- ⚠ **Not run here:** release binaries (this workspace can't download GitHub release files; the checksum logic is tested against a local stand-in, including tampered and unsigned releases), the Kali container (no container registry access), and the Security ISO itself. The GitHub workflow builds and boot-tests both ISOs.
+
 **Found by booting it, and fixed in the recipe:**
 
 - **Black screen in the VM:** QEMU's emulated `-cpu max` crashed Mesa's software renderer. The test now emulates a plain x86-64-v2 CPU.
@@ -53,6 +65,7 @@ _Last updated: 2026-11-11_
 | **macOS-style shell:** menu bar, Ambar menu, app name, global menus, Control Center, Dock, Launchpad, search, Mission Control, traffic-light windows, light/dark | ✅ seen working in the built desktop and the booted ISO · ⚠ gestures untested (no touchpad) |
 | Apps and install-anything (Store, `.deb`, Flatpak, Snap, AppImage, Wine) | ✅ installed and launch · ⚠ Flathub needs internet on first boot |
 | Installer (Calamares, Ambar branding) | ✅ full install in QEMU (Erase disk, 43/43 steps) · ✅ installed system boots to login and logs in · ⚠ installed desktop not drawn under emulation, under investigation |
+| Security tools (Kali's default set, `ambar-sec`, Ambar Security app) | ✅ Ubuntu and Python parts installed for real on 26.04 · ✅ checksum and service rules tested · ⚠ release binaries, Kali container and the Security ISO run only in CI so far |
 | Atomic edition (Fedora Kinoite, bootc, ARM64, Raspberry Pi) | ⚠ experimental: recipe written, built only in CI |
 | Docs site, community files | ✅ strict build; documented commands checked against the real CLI |
 

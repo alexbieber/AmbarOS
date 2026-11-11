@@ -61,6 +61,7 @@ nav:
       - Try it from a USB stick: live-usb.md
       - Install: install.md
       - First steps: first-steps.md
+      - Security tools: security.md
   - Use it:
       - Workflow format: workflow-format.md
       - Background service: service.md

@@ -19,6 +19,7 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `os/` (rest) | Experimental **atomic edition** (Fedora Kinoite + bootc, ARM64, Raspberry Pi) and shared test helpers (`smoke_test.py`) | Containerfile, bash |
 | `os/tests/` | Tests for both OS editions (static checks of the recipe, plus the boot harness) | pytest |
 | `desktop/plasma/` | macOS-style shell: `generate.py` (layout + defaults), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
+| `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
 | `desktop/share/` | `.desktop` files, autostart, icons | |
 | `crates/` | Rust workspace: `ambar-automation` (engine), `ambar-service` (`ambard`), `ambar-cli` (`ambar`), `ambar-ai`, `ambar-pkg` | Rust |
@@ -70,6 +71,8 @@ After changing anything in `desktop/plasma/` or `os/ubuntu/hooks|overlay`, rebui
 - **Plasma 6 widgets:** `metadata.json` + `contents/ui/main.qml` with `PlasmoidItem`. Don't name QML properties `icon`, `state` or other names the base type already declares; that's a load error. The tests check this.
 - **Aurorae decoration themes** are referenced as `__aurorae__svg__Ambar` / `__aurorae__svg__AmbarDark` with library `org.kde.kwin.aurorae.v2`.
 - **QEMU without KVM:** use the CPU from `test-qemu.sh` (not `-cpu max`, which crashes Mesa's software renderer) and `GPU=VGA` if the screen stays black.
+- **Security tools:** add or change tools only in `desktop/security/catalog.toml`. Prefer, in order: Ubuntu package (`apt`), `pipx`, `github` (only if the release publishes checksums), `kali` (container). A test fails if any tool in Kali's default set isn't covered or listed under `[excluded]` with a reason. Servers in the set must be listed under `[services] disable`. These tools are never callable from automations or the AI.
+- **Editions:** `FLAVOR=security` builds Ambar OS Security (Default tier preinstalled). Use a separate `WORK` per flavour; `iso` refuses a rootfs of the other flavour.
 - **Calamares runs 43 steps.** Its log is at `/root/.cache/calamares/session.log` in the live session.
 
 ## Style

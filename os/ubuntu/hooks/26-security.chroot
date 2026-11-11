@@ -1,0 +1,17 @@
+#!/bin/bash
+# Security edition only: open the Ambar Security app once, at the first login on
+# the installed system, so people can add the Kali-container tools (Metasploit,
+# Burp Suite, …). Not in the live session, where the installer comes first.
+set -euo pipefail
+[ "${AMBAR_FLAVOR:-standard}" = security ] || exit 0
+cat > /etc/xdg/autostart/os.ambar.SecurityFirstRun.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Ambar Security setup
+Comment=Finish setting up the security tools
+Exec=sh -c "grep -qw boot=casper /proc/cmdline || [ -e \"$HOME/.config/ambar/security-firstrun\" ] || { mkdir -p \"$HOME/.config/ambar\" && touch \"$HOME/.config/ambar/security-firstrun\" && exec ambar-security --first-run; }"
+Icon=ambar-security
+NoDisplay=true
+X-KDE-autostart-phase=2
+DESKTOP
+desktop-file-validate /etc/xdg/autostart/os.ambar.SecurityFirstRun.desktop

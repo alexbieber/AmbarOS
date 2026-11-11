@@ -80,7 +80,24 @@ Everything Ambar OS 0.2 includes, with how far each feature has been proven. The
 | First-run Welcome: appearance, optional AI, starter automations | ✅ |
 | `ambar` CLI and Python SDK | ✅ |
 
-## 6. For developers and testers
+## 6. Security tools (Kali's tool set, modernised)
+
+Details: [Security tools](docs/security.md).
+
+| Feature | Status |
+|---|---|
+| Every tool in Kali's default ISO covered (204 packages: each one installed or left out with a written reason), in Kali's tiers and 13 menu categories | ✅ coverage checked by a test |
+| `ambar-sec` command and the **Ambar Security** app (Ambar's kali-tweaks): install a tier, a category or single tools | ✅ tested with stand-in tools; the app tested offscreen |
+| ~150 tools from Ubuntu 26.04 packages, updated with the system | ✅ all 151 packages installed together in a clean 26.04 system |
+| Network services from the set (Apache, MySQL, Samba, SNMP, the SSH server sslh pulls in…) installed but left off; ones you enabled yourself are kept | ✅ seen in that install, and tested |
+| Python tools in isolated environments: NetExec, Certipy, Impacket, BloodHound CE, enum4linux-ng, theHarvester, sslyze, Volatility 3… | ✅ all 10 installed and run on Ubuntu 26.04 (Python 3.14) |
+| Release binaries (nuclei, httpx, subfinder, naabu, katana, dnsx, trufflehog, chisel), installed only if the published SHA-256 matches | ✅ checksum check, tampered and unsigned releases tested · ⚠️ real download needs the GitHub build |
+| Kali rolling container for Metasploit, Burp Suite, Responder, WPScan and the Large/Everything tiers | ✅ commands tested with stand-ins · ⚠️ container download not run here |
+| Modern replacements: NetExec, enum4linux-ng, ffuf/feroxbuster, subfinder, Name-That-Hash, Volatility 3, nuclei, naabu | ✅ in the catalogue |
+| Launchpad Security folder with Kali's categories | ✅ menu files validated · ⚠️ not yet seen in a booted desktop |
+| **Ambar OS Security** ISO (Default tier preinstalled) | ⚠️ recipe and CI build written; built and boot-tested by the GitHub workflow |
+
+## 7. For developers and testers
 
 | Feature | Status |
 |---|---|

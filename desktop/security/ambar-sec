@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+"""ambar-sec: install and update Ambar's security toolkit (Kali's tool set, modernised).
+
+    ambar-sec list [--tier T] [--category C] [--source S] [--installed]
+    ambar-sec info TOOL
+    ambar-sec install TARGET... [--dry-run] [--no-kali] [--system-only] [--yes]
+    ambar-sec remove TOOL...
+    ambar-sec update [--no-kali]
+    ambar-sec status
+    ambar-sec shell                 open a shell in the Kali container
+
+TARGET is a tier (top10, default, large, everything), a category (web, wireless,
+passwords, ...) or a tool name. Tools come from four places, picked per tool in
+catalog.toml: Ubuntu packages (apt), isolated Python environments (pipx),
+checksum-verified release binaries (github) and an isolated Kali rolling container
+(kali). System parts need administrator rights; ambar-sec asks with sudo.
+
+Only test systems you own or have written permission to test.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import io
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import gzip
+import time
+import tomllib
+import urllib.request
+import zipfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+CATALOG = Path(os.environ.get("AMBAR_SEC_CATALOG", "/usr/share/ambar/security/catalog.toml"))
+if not CATALOG.exists() and (HERE / "catalog.toml").exists():
+    CATALOG = HERE / "catalog.toml"
+# Everything the tool writes lives under ROOT, so tests can run it unprivileged.
+ROOT = Path(os.environ.get("AMBAR_SEC_ROOT", "/"))
+OPT = ROOT / "opt/ambar-security/bin"
+LOCAL_BIN = ROOT / "usr/local/bin"
+STATE = ROOT / "var/lib/ambar-security"
+SYS_APPS = ROOT / "usr/share/applications"
+GITHUB_API = os.environ.get("AMBAR_SEC_GITHUB_API", "https://api.github.com")
+TIERS = ["top10", "default", "large", "everything"]
+NOTICE = "Use these tools only on systems you own or have written permission to test."
+APT_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
+
+
+class Fail(Exception):
+    """A user-facing error: printed without a traceback."""
+
+
+# ----------------------------------------------------------------- catalogue
+
+def load(path: Path = CATALOG) -> dict:
+    with open(path, "rb") as f:
+        cat = tomllib.load(f)
+    for t in cat["tool"]:
+        t.setdefault("pkg", t["name"])
+        t.setdefault("bin", [t["name"]])
+        t.setdefault("gui", False)
+        t.setdefault("replaces", [])
+    return cat
+
+
+def packages(tool: dict) -> list[str]:
+    return tool["pkg"].split() if tool["src"] in ("apt", "kali") else [tool["pkg"]]
+
+
+def resolve(cat: dict, targets: list[str]) -> tuple[list[dict], list[str]]:
+    """Targets → (tools, extra Kali metapackages). Tiers include the tiers below them."""
+    tools: dict[str, dict] = {}
+    meta: list[str] = []
+    by_name = {t["name"]: t for t in cat["tool"]}
+    for target in targets:
+        if target in TIERS:
+            upto = TIERS.index(min(target, "default", key=TIERS.index))
+            for t in cat["tool"]:
+                if TIERS.index(t["tier"]) <= upto:
+                    tools[t["name"]] = t
+            if target in ("large", "everything"):
+                meta.append(cat["kali"][target])
+        elif target in cat["categories"]:
+            for t in cat["tool"]:
+                if t["cat"] == target:
+                    tools[t["name"]] = t
+        elif target in by_name:
+            tools[target] = by_name[target]
+        else:
+            import difflib
+            hint = difflib.get_close_matches(target, [*TIERS, *cat["categories"], *by_name], n=4, cutoff=0.6)
+            raise Fail(f"unknown tool, tier or category: {target}" + (f" (did you mean {', '.join(hint)}?)" if hint else ""))
+    return list(tools.values()), meta
+
+
+# ----------------------------------------------------------------- helpers
+
+def is_root() -> bool:
+    forced = os.environ.get("AMBAR_SEC_ASSUME_ROOT")  # "1"/"0" in tests
+    return forced == "1" if forced in ("0", "1") else os.geteuid() == 0
+
+
+def run(cmd: list[str], dry: bool, env: dict | None = None, check: bool = True) -> int:
+    print("  $ " + " ".join(cmd), flush=True)
+    if dry:
+        return 0
+    r = subprocess.run(cmd, env={**os.environ, **(env or {})})
+    if check and r.returncode != 0:
+        raise Fail(f"command failed ({r.returncode}): {' '.join(cmd)}")
+    return r.returncode
+
+
+def log(msg: str) -> None:
+    for path in ([STATE / "log"] if is_root() else [Path.home() / ".local/state/ambar/security.log"]):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a") as f:
+                f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}\n")
+        except OSError:
+            pass
+
+
+def arch() -> tuple[str, ...]:
+    m = platform.machine().lower()
+    return ("arm64", "aarch64") if m in ("aarch64", "arm64") else ("amd64", "x86_64")
+
+
+def dpkg_installed(pkgs: list[str]) -> set[str]:
+    if not shutil.which("dpkg-query"):
+        return set()
+    r = subprocess.run(["dpkg-query", "-W", "-f", "${Package} ${db:Status-Status}\n", *pkgs],
+                       capture_output=True, text=True)
+    return {l.split()[0] for l in r.stdout.splitlines() if l.endswith(" installed")}
+
+
+def github_state() -> dict:
+    try:
+        return json.loads((STATE / "github.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def pipx_installed() -> set[str]:
+    if not shutil.which("pipx"):
+        return set()
+    r = subprocess.run(["pipx", "list", "--global", "--short"], capture_output=True, text=True)
+    return {l.split()[0].lower() for l in r.stdout.splitlines() if l.strip()}
+
+
+def kali_ready(cat: dict) -> bool:
+    if not shutil.which("distrobox"):
+        return False
+    r = subprocess.run(["distrobox", "list", "--no-color"], capture_output=True, text=True)
+    return cat["kali"]["container"] in r.stdout
+
+
+def installed(tool: dict, cat: dict, cache: dict) -> bool:
+    src = tool["src"]
+    if src == "apt":
+        cache.setdefault("apt", dpkg_installed([p for t in cat["tool"] if t["src"] == "apt" for p in packages(t)]))
+        return all(p in cache["apt"] for p in packages(tool))
+    if src == "pipx":
+        cache.setdefault("pipx", pipx_installed())
+        return pip_name(tool).lower() in cache["pipx"]
+    if src == "github":
+        return tool["name"] in github_state()
+    if src == "kali":
+        cache.setdefault("kali", kali_ready(cat))
+        exported = Path.home() / ".local/bin"
+        return cache["kali"] and (not tool["bin"] or all((exported / b).exists() for b in tool["bin"]))
+    return False
+
+
+def pip_name(tool: dict) -> str:
+    spec = tool["pkg"]
+    if spec.startswith("git+"):
+        return spec.rstrip("/").split("/")[-1].removesuffix(".git").lower()
+    return re.split(r"[<>=\[ ]", spec)[0]
+
+
+# ----------------------------------------------------------------- github
+
+def http_get(url: str) -> bytes:
+    headers = {"User-Agent": "ambar-sec", "Accept": "application/vnd.github+json"}
+    if os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as r:
+        return r.read()
+
+
+def pick_assets(tool: dict, assets: list[dict]) -> tuple[dict, dict]:
+    name = tool["name"].lower()
+    archs = "|".join(arch())
+    want = re.compile(rf"^{re.escape(name)}[_-].*linux[_-]({archs})\.(zip|tar\.gz|tgz|gz)$", re.I)
+    binary = [a for a in assets if want.match(a["name"])]
+    sums = [a for a in assets if re.search(r"checksums?\.txt$|sha256sums?(\.txt)?$", a["name"], re.I)]
+    if not binary:
+        raise Fail(f"{tool['name']}: no Linux {arch()[0]} build in the latest release")
+    if not sums:
+        raise Fail(f"{tool['name']}: the release publishes no checksums, so it isn't installed")
+    return binary[0], sums[0]
+
+
+def verify(name: str, data: bytes, sums_text: str) -> str:
+    digest = hashlib.sha256(data).hexdigest()
+    for line in sums_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[-1].lstrip("*") == name:
+            if parts[0].lower() != digest:
+                raise Fail(f"{name}: SHA-256 mismatch, refusing to install (expected {parts[0]}, got {digest})")
+            return digest
+    raise Fail(f"{name}: not listed in the release checksums, refusing to install")
+
+
+def extract(asset: str, data: bytes, binary: str) -> bytes:
+    if asset.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for n in z.namelist():
+                if Path(n).name == binary:
+                    return z.read(n)
+    elif asset.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
+            for m in t.getmembers():
+                if m.isfile() and Path(m.name).name == binary:
+                    return t.extractfile(m).read()
+    elif asset.endswith(".gz"):
+        return gzip.decompress(data)
+    raise Fail(f"{asset}: no '{binary}' inside")
+
+
+def github_install(tool: dict, dry: bool) -> None:
+    repo = tool["pkg"]
+    print(f"  github  {repo} (latest release, SHA-256 checked)")
+    if dry:
+        return
+    rel = json.loads(http_get(f"{GITHUB_API}/repos/{repo}/releases/latest"))
+    asset, sums = pick_assets(tool, rel["assets"])
+    data = http_get(asset["browser_download_url"])
+    digest = verify(asset["name"], data, http_get(sums["browser_download_url"]).decode())
+    OPT.mkdir(parents=True, exist_ok=True)
+    LOCAL_BIN.mkdir(parents=True, exist_ok=True)
+    for b in tool["bin"]:
+        target = OPT / b
+        tmp = target.with_suffix(".new")
+        tmp.write_bytes(extract(asset["name"], data, b))
+        tmp.chmod(0o755)
+        tmp.replace(target)
+        link = LOCAL_BIN / b
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target if ROOT == Path("/") else os.path.relpath(target, link.parent))
+    state = github_state()
+    state[tool["name"]] = {"repo": repo, "version": rel.get("tag_name", "?"), "asset": asset["name"], "sha256": digest}
+    STATE.mkdir(parents=True, exist_ok=True)
+    (STATE / "github.json").write_text(json.dumps(state, indent=2))
+    print(f"  installed {tool['name']} {rel.get('tag_name', '')}")
+
+
+# ----------------------------------------------------------------- launchers
+
+def write_launchers(tools: list[dict], cat: dict, apps: Path) -> None:
+    """One menu entry per tool, under Security → <category>, like Kali's menu."""
+    apps.mkdir(parents=True, exist_ok=True)
+    for t in tools:
+        if not t["bin"] or t["cat"] == "support":
+            continue
+        b = t["bin"][0]
+        if t["gui"]:
+            exec_line, term = b, "false"
+        else:
+            exec_line, term = f'sh -c "{b} -h; exec bash"', "true"
+        (apps / f"ambar-sec-{t['name']}.desktop").write_text(
+            "[Desktop Entry]\nType=Application\n"
+            f"Name={t['name']}\nComment={t['about']}\nExec={exec_line}\nTerminal={term}\n"
+            "Icon=ambar-security\n"
+            f"Categories=X-Ambar-Security;X-Ambar-Security-{t['cat']};\n"
+            "Keywords=security;pentest;kali;\n")
+
+
+def remove_launchers(tools: list[dict], apps: Path) -> None:
+    for t in tools:
+        (apps / f"ambar-sec-{t['name']}.desktop").unlink(missing_ok=True)
+
+
+# ----------------------------------------------------------------- services
+
+def service_units(cat: dict) -> list[str]:
+    units = []
+    for name in cat["services"]["disable"]:
+        units += [name] if "." in name else [f"{name}.service", f"{name}.socket"]
+    return units
+
+
+def enabled_units(cat: dict) -> set[str]:
+    if not shutil.which("systemctl"):
+        return set()
+    out = set()
+    for unit in service_units(cat):
+        r = subprocess.run(["systemctl", "is-enabled", unit], capture_output=True, text=True)
+        if r.stdout.strip() in ("enabled", "enabled-runtime", "alias"):
+            out.add(unit)
+    return out
+
+
+# ----------------------------------------------------------------- phases
+
+def system_phase(tools: list[dict], cat: dict, dry: bool) -> list[str]:
+    """apt, pipx --global and github binaries. Runs as root."""
+    failed = []
+    apt = {p for t in tools if t["src"] == "apt" for p in packages(t)}
+    apt |= {d for t in tools if t["src"] != "kali" for d in t.get("deps", [])}  # libraries and compilers tools need
+    if any(t["src"] == "pipx" for t in tools) and not shutil.which("pipx"):
+        apt.add("pipx")
+    apt = sorted(apt)
+    if apt:
+        print(f"\n• Ubuntu packages ({len(apt)})")
+        before = enabled_units(cat)
+        run(["apt-get", "update"], dry, APT_ENV, check=False)
+        run(["apt-get", "install", "-y", *apt], dry, APT_ENV)
+        # Kali leaves network services off until you start them; so does Ambar. Only
+        # services this install switched on are turned off: never one you enabled.
+        for unit in (sorted(enabled_units(cat) - before) if not dry else service_units(cat)):
+            run(["systemctl", "disable", unit], dry, check=False)
+            run(["systemctl", "stop", unit], dry, check=False)
+    pipx = [t for t in tools if t["src"] == "pipx"]
+    if pipx:
+        print(f"\n• Python tools, each in its own environment ({len(pipx)})")
+        have = pipx_installed()
+        for t in pipx:
+            verb = ["upgrade", "--global", pip_name(t)] if pip_name(t).lower() in have else ["install", "--global", t["pkg"]]
+            if run(["pipx", *verb], dry, check=False) != 0:
+                failed.append(t["name"])
+    gh = [t for t in tools if t["src"] == "github"]
+    if gh:
+        print(f"\n• Release binaries ({len(gh)})")
+        for t in gh:
+            try:
+                github_install(t, dry)
+            except (Fail, OSError, ValueError) as e:
+                print(f"  ! {e}")
+                failed.append(t["name"])
+    if not dry:
+        write_launchers([t for t in tools if t["src"] != "kali" and t["name"] not in failed], cat, SYS_APPS)
+    return failed
+
+
+def kali_phase(tools: list[dict], meta: list[str], cat: dict, dry: bool) -> list[str]:
+    """Kali rolling in an isolated distrobox container. Runs as the user."""
+    kali = [t for t in tools if t["src"] == "kali"]
+    if not kali and not meta:
+        return []
+    k = cat["kali"]
+    pkgs = sorted({p for t in kali for p in packages(t)} | set(meta))
+    print(f"\n• Kali container '{k['container']}' ({len(pkgs)} packages)")
+    if not dry and not shutil.which("distrobox"):
+        print("  ! distrobox isn't installed; skipping the Kali tools")
+        return [t["name"] for t in kali]
+    if dry or not kali_ready(cat):
+        run(["distrobox", "create", "--yes", "--name", k["container"], "--image", k["image"]], dry)
+    enter = ["distrobox", "enter", k["container"], "--"]
+    run([*enter, "sudo", "apt-get", "update"], dry)
+    run([*enter, "sudo", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", *pkgs], dry)
+    for t in kali:
+        for b in t["bin"]:
+            run([*enter, "distrobox-export", "--bin", f"/usr/bin/{b}",
+                 "--export-path", str(Path.home() / ".local/bin")], dry, check=False)
+        if t["gui"]:
+            run([*enter, "distrobox-export", "--app", t["name"]], dry, check=False)
+    if not dry:
+        write_launchers([t for t in kali if not t["gui"]], cat, Path.home() / ".local/share/applications")
+    return []
+
+
+def elevate(args: list[str]) -> int:
+    """Run the system phase as root. sudo-rs resets the environment, so pass what matters."""
+    keep = {k: v for k, v in os.environ.items() if k.startswith("AMBAR_SEC_") or k == "GITHUB_TOKEN"}
+    cmd = ["sudo", "/usr/bin/env", *[f"{k}={v}" for k, v in keep.items()], sys.executable, str(Path(__file__).resolve()), *args]
+    print("  (asking for your password to install system packages)")
+    return subprocess.run(cmd).returncode
+
+
+# ----------------------------------------------------------------- commands
+
+def cmd_list(cat: dict, a) -> int:
+    cache: dict = {}
+    rows = [t for t in cat["tool"]
+            if (not a.tier or TIERS.index(t["tier"]) <= TIERS.index(min(a.tier, "default", key=TIERS.index)))
+            and (not a.category or t["cat"] == a.category)
+            and (not a.source or t["src"] == a.source)]
+    for c in cat["categories"]:
+        group = [t for t in rows if t["cat"] == c]
+        if a.installed:
+            group = [t for t in group if installed(t, cat, cache)]
+        if not group:
+            continue
+        print(f"\n{cat['categories'][c]}")
+        for t in group:
+            mark = "✓" if a.installed or installed(t, cat, cache) else " "
+            new = f"  (replaces {', '.join(t['replaces'])})" if t["replaces"] else ""
+            print(f"  {mark} {t['name']:<22} {t['src']:<6} {t['about']}{new}")
+    return 0
+
+
+def cmd_info(cat: dict, a) -> int:
+    t, _ = resolve(cat, [a.tool])
+    t = t[0]
+    print(f"{t['name']}: {t['about']}\n  category: {cat['categories'][t['cat']]}\n  tier: {t['tier']}"
+          f"\n  source: {t['src']} ({t['pkg']})\n  commands: {', '.join(t['bin']) or '-'}")
+    if t["replaces"]:
+        print(f"  modern replacement for: {', '.join(t['replaces'])}")
+    print(f"  installed: {'yes' if installed(t, cat, {}) else 'no'}")
+    return 0
+
+
+def cmd_install(cat: dict, a) -> int:
+    tools, meta = resolve(cat, a.targets)
+    print(NOTICE)
+    counts = {s: sum(t["src"] == s for t in tools) for s in ("apt", "pipx", "github", "kali")}
+    print(f"{len(tools)} tools: {counts['apt']} Ubuntu, {counts['pipx']} Python, {counts['github']} binaries, "
+          f"{counts['kali']} Kali container" + (f", plus {' '.join(meta)}" if meta else ""))
+    log(f"install {' '.join(a.targets)}")
+    failed: list[str] = []
+    system = [t for t in tools if t["src"] != "kali"]
+    if system:
+        if is_root() or a.dry_run:
+            failed += system_phase(system, cat, a.dry_run)
+        else:
+            if elevate(["_system", *[t["name"] for t in system]]) != 0:
+                failed.append("system packages")
+    if not a.no_kali and not a.system_only:
+        if is_root() and not a.dry_run and not os.environ.get("AMBAR_SEC_KALI_AS_ROOT"):
+            print("\n• Kali container: skipped when running as root. Run 'ambar-sec install "
+                  + " ".join(a.targets) + "' as your user to add it.")
+        else:
+            failed += kali_phase(tools, meta, cat, a.dry_run)
+    print("\nDone." if not failed else f"\nDone, but these didn't install: {', '.join(failed)}")
+    log(f"install result: failed={failed}")
+    return 0 if not failed else 1
+
+
+def cmd_system(cat: dict, a) -> int:
+    """Internal: the root half of install (called through sudo)."""
+    if not is_root():
+        raise Fail("_system must run as root")
+    by_name = {t["name"]: t for t in cat["tool"]}
+    return 0 if not system_phase([by_name[n] for n in a.tools], cat, False) else 1
+
+
+def cmd_remove(cat: dict, a) -> int:
+    tools, _ = resolve(cat, a.targets)
+    if not is_root() and any(t["src"] != "kali" for t in tools):
+        return elevate(["remove", *a.targets])
+    for t in tools:
+        if t["src"] == "apt":
+            run(["apt-get", "remove", "-y", *packages(t)], a.dry_run, APT_ENV, check=False)
+        elif t["src"] == "pipx":
+            run(["pipx", "uninstall", "--global", pip_name(t)], a.dry_run, check=False)
+        elif t["src"] == "github":
+            for b in t["bin"]:
+                (LOCAL_BIN / b).unlink(missing_ok=True)
+                (OPT / b).unlink(missing_ok=True)
+            state = github_state()
+            state.pop(t["name"], None)
+            STATE.mkdir(parents=True, exist_ok=True)
+            (STATE / "github.json").write_text(json.dumps(state, indent=2))
+        else:
+            print(f"  {t['name']} lives in the Kali container: 'ambar-sec shell' then 'sudo apt remove {t['pkg']}'")
+    remove_launchers(tools, SYS_APPS)
+    log(f"remove {' '.join(a.targets)}")
+    return 0
+
+
+def cmd_update(cat: dict, a) -> int:
+    print("Updating installed security tools")
+    cache: dict = {}
+    mine = [t for t in cat["tool"] if t["src"] != "kali" and installed(t, cat, cache)]
+    if mine:
+        if is_root() or a.dry_run:
+            system_phase(mine, cat, a.dry_run)
+        else:
+            elevate(["_system", *[t["name"] for t in mine]])
+    if not a.no_kali and (a.dry_run or kali_ready(cat)):
+        enter = ["distrobox", "enter", cat["kali"]["container"], "--"]
+        run([*enter, "sudo", "apt-get", "update"], a.dry_run)
+        run([*enter, "sudo", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "full-upgrade", "-y"], a.dry_run)
+    log("update")
+    return 0
+
+
+def cmd_status(cat: dict, a) -> int:
+    cache: dict = {}
+    total = {s: [0, 0] for s in ("apt", "pipx", "github", "kali")}
+    for t in cat["tool"]:
+        total[t["src"]][1] += 1
+        total[t["src"]][0] += installed(t, cat, cache)
+    names = {"apt": "Ubuntu packages", "pipx": "Python tools", "github": "Release binaries", "kali": "Kali container"}
+    for s, (have, n) in total.items():
+        print(f"{names[s]:<17} {have:>3}/{n}")
+    print(f"Kali container    {'ready' if cache.get('kali', kali_ready(cat)) else 'not created'}")
+    for name, info in sorted(github_state().items()):
+        print(f"  {name} {info['version']}  sha256 {info['sha256'][:16]}…")
+    return 0
+
+
+def cmd_shell(cat: dict, a) -> int:
+    if not shutil.which("distrobox"):
+        raise Fail("distrobox isn't installed")
+    os.execvp("distrobox", ["distrobox", "enter", cat["kali"]["container"]])
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="ambar-sec", description=__doc__.split("\n")[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("list", help="list tools")
+    s.add_argument("--tier", choices=TIERS)
+    s.add_argument("--category")
+    s.add_argument("--source", choices=["apt", "pipx", "github", "kali"])
+    s.add_argument("--installed", action="store_true")
+    s = sub.add_parser("info", help="details of one tool")
+    s.add_argument("tool")
+    for name in ("install", "remove"):
+        s = sub.add_parser(name, help=f"{name} tools, a tier or a category")
+        s.add_argument("targets", nargs="+")
+        s.add_argument("--dry-run", action="store_true", help="show what would run")
+        s.add_argument("--no-kali", action="store_true", help="skip the Kali container")
+        s.add_argument("--system-only", action="store_true", help="only apt, pipx and binaries")
+        s.add_argument("--yes", "-y", action="store_true", help="don't ask (installs never ask)")
+    s = sub.add_parser("update", help="update everything that's installed")
+    s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--no-kali", action="store_true")
+    sub.add_parser("status", help="what's installed")
+    sub.add_parser("shell", help="open a shell in the Kali container")
+    s = sub.add_parser("_system", help=argparse.SUPPRESS)
+    s.add_argument("tools", nargs="+")
+    a = p.parse_args(argv)
+    try:
+        cat = load()
+        if getattr(a, "category", None) and a.category not in cat["categories"]:
+            raise Fail(f"unknown category {a.category}; one of: {', '.join(cat['categories'])}")
+        return {"list": cmd_list, "info": cmd_info, "install": cmd_install, "remove": cmd_remove,
+                "update": cmd_update, "status": cmd_status, "shell": cmd_shell, "_system": cmd_system}[a.cmd](cat, a)
+    except Fail as e:
+        print(f"ambar-sec: {e}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

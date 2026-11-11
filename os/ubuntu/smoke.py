@@ -40,6 +40,15 @@ grep -h '^\(Name\|Exec\)=' /usr/share/applications/org.kde.discover.desktop | he
 flatpak remotes --system 2>/dev/null | grep -q flathub && echo FLATHUB_OK
 systemctl --user is-active ambard && echo AMBARD_OK
 ambar-control-center status
+ambar-sec list --tier top10 >/dev/null && echo SEC_CLI_OK
+if [ "$(cat /etc/ambar-flavor 2>/dev/null)" = security ]; then
+  echo FLAVOR_SECURITY
+  for t in nmap wireshark hydra john sqlmap hashcat ffuf gobuster nikto bettercap nxc certipy nuclei httpx subfinder; do
+    command -v "$t" >/dev/null && echo "SEC_TOOL_OK $t" || echo "SEC_TOOL_MISSING $t"
+  done
+  for s in apache2 smbd snmpd; do systemctl is-enabled "$s" 2>/dev/null | grep -q enabled && echo "SERVICE_ON $s"; done
+  ambar-sec status
+fi
 echo __END__
 """
 
@@ -58,6 +67,13 @@ EXPECT = [
     ("installer", r"^APP_OK calamares"),
     ("ambar service", r"^AMBARD_OK"),
     ("control center backend", r'"volume"'),
+    ("security toolkit", r"^SEC_CLI_OK"),
+]
+# Extra checks for the Security edition (FLAVOR_SECURITY in the output).
+EXPECT_SECURITY = [
+    ("kali top tools", r"^SEC_TOOL_OK nmap"),
+    ("netexec (pipx)", r"^SEC_TOOL_OK nxc"),
+    ("nuclei (verified binary)", r"^SEC_TOOL_OK nuclei"),
 ]
 
 
@@ -75,14 +91,16 @@ def run(sock, log, monitor, shots, boot_timeout):
     if monitor and shots:
         time.sleep(30)
         screendump(monitor, str(Path(shots) / "desktop.png"))
-    missing = [l.split()[1] for l in out.splitlines() if l.startswith("APP_MISSING")]
-    failed = [n for n, rx in EXPECT if not re.search(rx, out, re.M)]
+    missing = [l.split()[1] for l in out.splitlines() if l.startswith(("APP_MISSING", "SEC_TOOL_MISSING"))]
+    expect = EXPECT + (EXPECT_SECURITY if re.search(r"^FLAVOR_SECURITY", out, re.M) else [])
+    failed = [n for n, rx in expect if not re.search(rx, out, re.M)]
+    failed += [f"service {l.split()[1]} enabled" for l in out.splitlines() if l.startswith("SERVICE_ON")]
     if missing:
         print("apps missing:", " ".join(missing))
     if failed or missing:
         print("BOOT TEST FAILED:", ", ".join(failed + [f"app {m}" for m in missing]))
         return 1
-    print("BOOT TEST PASSED:", ", ".join(n for n, _ in EXPECT))
+    print("BOOT TEST PASSED:", ", ".join(n for n, _ in expect))
     return 0
 
 

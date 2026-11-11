@@ -1,7 +1,8 @@
 name: Ambar OS ISO
 
-# Builds the Ambar OS live/installer ISO (Ubuntu 26.04 LTS + KDE Plasma 6,
-# macOS-style desktop, Firefox from Mozilla's repository), boots it in QEMU/KVM,
+# Builds the Ambar OS live/installer ISOs (Ubuntu 26.04 LTS + KDE Plasma 6,
+# macOS-style desktop, Firefox from Mozilla's repository): the standard edition and
+# the Security edition (Kali's default tool set), boots each in QEMU/KVM,
 # runs the boot test over the serial console and keeps the ISO, the boot log
 # and screenshots of the booted desktop as artifacts.
 
@@ -17,7 +18,11 @@ permissions:
 jobs:
   iso:
     runs-on: ubuntu-24.04
-    timeout-minutes: 300
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [standard, security]
     steps:
       - name: Free disk space
         run: |
@@ -34,24 +39,27 @@ jobs:
           sudo apt-get install -y debootstrap squashfs-tools xorriso grub-efi-amd64-bin grub-pc-bin mtools \
             dosfstools qemu-system-x86 ovmf
       - name: Build the ISO
-        run: sudo BROWSER=firefox WORK=/mnt/ambar-build OUT="$PWD/output/ubuntu" os/ubuntu/build.sh all
+        run: sudo BROWSER=firefox FLAVOR=${{ matrix.flavor }} WORK=/mnt/ambar-build OUT="$PWD/output/ubuntu" os/ubuntu/build.sh all
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           sudo chown -R "$USER" output
       - name: Boot the ISO and test it
-        run: os/ubuntu/test-qemu.sh output/ubuntu/ambar-os-*-amd64.iso
+        run: |
+          iso=$(ls output/ubuntu/ambar-os-*-amd64.iso)
+          echo "testing $iso"
+          os/ubuntu/test-qemu.sh "$iso"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ambar-os-boot-evidence
+          name: ambar-os-${{ matrix.flavor }}-boot-evidence
           path: output/ubuntu/boot/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: ambar-os-iso
+          name: ambar-os-${{ matrix.flavor }}-iso
           path: |
             output/ubuntu/ambar-os-*-amd64.iso
             output/ubuntu/ambar-os-*-amd64.iso.sha256

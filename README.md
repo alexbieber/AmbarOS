@@ -36,6 +36,8 @@
 
 It installs **any app**: the Ambar Store, `.deb` downloads, Flatpak, Snap, AppImage, and Windows programs through Wine.
 
+For security work there's **Ambar OS Security**: Kali Linux's whole tool set, organised the Kali way, but from modern sources. Ubuntu packages, isolated Python tools, checksum-verified release binaries, and an isolated Kali container for the rest. See [Security tools](docs/security.md).
+
 Under the hood it's **Ubuntu 26.04 LTS** with **KDE Plasma 6**, so it gets five years of security updates and Ubuntu's hardware support. On top of that, Ambar adds an **automation layer**: background automations, and an AI assistant that drafts new ones. Nothing runs without your OK.
 
 <p align="center">
@@ -159,6 +161,7 @@ The extra layer: automations that run in the background, an AI assistant that dr
 | 🗂️ **Apps** | Browser, Files, Terminal, LibreOffice, KMail, KOrganizer, Okular, Gwenview, Elisa, Haruna, Kate, Spectacle, Ark, KCalc, KDE Connect, System Monitor, Timeshift |
 | 🛍️ **Install anything** | Ambar Store (apt, Flathub, Snap), `.deb` double-click, AppImage, Wine, distrobox/podman, codecs, Driver Manager |
 | 🖥️ **Ambar apps** | Automation Center (Qt/QML), Meta+Space search for automations, first-run Welcome, the Ambar logo and theme |
+| 🛡️ **Security tools** | Kali's default set (204 packages covered) in Kali's tiers and categories, with modern replacements (NetExec, nuclei, ffuf, subfinder, enum4linux-ng…), the `ambar-sec` command, the Ambar Security app and a Security edition ISO |
 | 🔧 **Tools** | `ambar` CLI, Python SDK, `ambar-hwreport` for hardware reports |
 
 ```mermaid

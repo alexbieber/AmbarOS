@@ -1,0 +1,15 @@
+---
+description: Security toolkit (Kali tool set) - catalogue, ambar-sec CLI, Ambar Security app, Security ISO flavour.
+globs: desktop/security/**, os/ubuntu/hooks/26-security.chroot, docs/security.md
+alwaysApply: false
+---
+
+# Security toolkit (desktop/security)
+
+- `catalog.toml` is the single source of truth: each tool has a tier (top10/default; large and everything are Kali metapackages in the container), a Kali menu category and one source.
+- Source order of preference: `apt` (Ubuntu 26.04 package) → `pipx` (isolated Python env, PyPI name or `git+https` URL) → `github` (static release binary; refused unless the release publishes a checksums file and the SHA-256 matches) → `kali` (Kali rolling inside the `ambar-kali` distrobox).
+- Check new apt names exist in Ubuntu 26.04 before adding them. `tests/test_ambar_sec.py` fails if any package in `kali-default.txt` is neither covered nor listed under `[excluded]` with a reason.
+- Packages that start a network service must be added to `[services] disable`. The boot test fails the Security ISO if apache2, smbd or snmpd are enabled.
+- Never weaken the checksum check, never run the Kali container as root, and never expose these tools to Ambar automations or the AI (their action set stays closed).
+- The `ambar-security` app only builds an `ambar-sec` command and runs it in Konsole; keep privileged work in `ambar-sec`.
+- Docs: `docs/security.md`. Keep the authorised-use notice.

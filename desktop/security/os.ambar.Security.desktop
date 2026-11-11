@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ambar Security
+GenericName=Security Tools
+Comment=Install Kali's security tools, from modern sources
+Exec=ambar-security
+Icon=ambar-security
+Terminal=false
+Categories=System;Security;X-Ambar-Security;
+Keywords=kali;pentest;security;hacking;nmap;metasploit;burp;

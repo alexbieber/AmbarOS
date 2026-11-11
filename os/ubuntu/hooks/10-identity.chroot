@@ -20,6 +20,11 @@ SUPPORT_URL="https://alexbieber.github.io/AmbarOS/troubleshooting/"
 BUG_REPORT_URL="https://github.com/alexbieber/AmbarOS/issues"
 LOGO=ambar-logo
 OS
+case "${AMBAR_FLAVOR:-standard}" in
+  security) printf 'VARIANT="Security Edition"\nVARIANT_ID=security\n' >> /usr/lib/os-release
+            sed -i 's/^PRETTY_NAME="Ambar OS /PRETTY_NAME="Ambar OS Security /' /usr/lib/os-release ;;
+esac
+echo "${AMBAR_FLAVOR:-standard}" > /etc/ambar-flavor
 ln -sf ../usr/lib/os-release /etc/os-release
 # lsb_release: keep DISTRIB_ID/CODENAME as Ubuntu so PPAs and vendor .deb
 # installers that check them keep working; only the description is ours.

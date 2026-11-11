@@ -182,7 +182,7 @@ def test_dark_variant_switches_decoration_and_icons():
 
 # ------------------------------------------------------------ ISO boot test harness
 
-def fake_live_console(path, good=True):
+def fake_live_console(path, good=True, flavor="standard", sec_broken=False):
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     srv.bind(path)
     srv.listen(1)
@@ -205,7 +205,11 @@ def fake_live_console(path, good=True):
         out += [f"WIDGET_OK {w}" for w in ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter",
                                            "org.kde.plasma.kickerdash", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
         out += ["Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
-                '{"wifi": null, "volume": {"value": 40, "muted": false}}', "__END__"]
+                '{"wifi": null, "volume": {"value": 40, "muted": false}}', "SEC_CLI_OK"]
+        if flavor == "security":
+            out += ["FLAVOR_SECURITY", "SEC_TOOL_OK nmap", "SEC_TOOL_OK nuclei"]
+            out += ["SERVICE_ON apache2"] if sec_broken else ["SEC_TOOL_OK nxc"]
+        out += ["__END__"]
         c.sendall(("\r\n".join(out) + "\r\n").encode())
         c.close()
 
@@ -221,6 +225,29 @@ def test_iso_boot_harness(tmp_path, good, capsys):
     assert code == (0 if good else 1), out
     if not good:
         assert "app libreoffice" in out
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_security_iso_boot_harness(tmp_path, broken, capsys):
+    sock = str(tmp_path / "s")
+    fake_live_console(sock, True, flavor="security", sec_broken=broken)
+    code = ubuntu_smoke.run(sock, str(tmp_path / "serial.log"), None, None, boot_timeout=10)
+    out = capsys.readouterr().out
+    assert code == (1 if broken else 0), out
+    if broken:
+        assert "service apache2 enabled" in out and "netexec (pipx)" in out
+
+
+def test_security_flavour_in_the_build():
+    b = (U / "build.sh").read_text()
+    assert 'FLAVOR="${FLAVOR:-standard}"' in b and "ambar-sec install default --system-only" in b
+    assert 'ambar-os$SUFFIX-$VERSION-amd64.iso' in b
+    assert "etc/xdg/menus/applications-merged/ambar-security.menu" in b
+    assert 'AMBAR_FLAVOR="$FLAVOR"' in b
+    h = (U / "hooks" / "26-security.chroot").read_text()
+    assert "boot=casper" in h and "--first-run" in h
+    wf = (U.parents[1] / ".github/workflows/os-ubuntu.yml").read_text()
+    assert "flavor: [standard, security]" in wf
 
 
 def test_install_anything_file_handlers():

@@ -1,0 +1,1225 @@
+# Ambar Security tool catalogue
+#
+# One list for every security tool Ambar can install, organised the way Kali
+# organises them (tiers and menu categories), but each tool comes from the most
+# modern source available:
+#
+#   apt     Ubuntu 26.04 package: security updates arrive with normal updates
+#   pipx    Python tool in its own virtual environment (PyPI name or git URL)
+#   github  single static binary from the project's GitHub releases, installed
+#           only if its SHA-256 matches the checksums file the release publishes
+#   kali    package from Kali rolling, inside an isolated distrobox container
+#
+# Tiers mirror Kali's metapackages:
+#   top10    = kali-tools-top10
+#   default  = kali-linux-default (what Kali's normal ISO ships) + modern tools
+#   large    = default + kali-linux-large inside the Kali container
+#   everything = default + kali-linux-everything inside the Kali container
+#
+# Fields: name (what you run), cat (menu category), tier, src, pkg (package,
+# pip spec or owner/repo; defaults to name), bin (commands, default [name]),
+# gui (a desktop app), replaces (older tools it supersedes), deps (Ubuntu
+# packages a pipx or github tool needs to build or run), about.
+
+[categories]
+information-gathering = "Information Gathering"
+vulnerability-analysis = "Vulnerability Analysis"
+web = "Web Application Analysis"
+database = "Database Assessment"
+passwords = "Password Attacks"
+wireless = "Wireless Attacks"
+reverse-engineering = "Reverse Engineering"
+exploitation = "Exploitation Tools"
+sniffing-spoofing = "Sniffing & Spoofing"
+post-exploitation = "Post Exploitation"
+forensics = "Forensics"
+reporting = "Reporting Tools"
+social-engineering = "Social Engineering Tools"
+support = "Supporting Tools"
+
+[tiers]
+top10 = "Kali's top 10 tools"
+default = "Everything in Kali's default ISO, with modern replacements"
+large = "Default + Kali's large set (in the Kali container)"
+everything = "Default + every Kali tool (in the Kali container)"
+
+[kali]
+image = "docker.io/kalilinux/kali-rolling:latest"
+container = "ambar-kali"
+large = "kali-linux-large"
+everything = "kali-linux-everything"
+
+# Network services the tool set brings in (directly or as dependencies: sslh
+# pulls in the SSH server). Kali leaves them off until you start them, and so
+# does Ambar: ambar-sec turns off the ones an install switched on (.service and
+# .socket), and never touches a service you had enabled yourself.
+[services]
+disable = ["apache2", "mariadb", "mysql", "smbd", "nmbd", "samba-ad-dc", "snmpd", "atftpd",
+           "inetsim", "miredo", "sslh", "stunnel4", "iodined", "redsocks", "openvpn", "ssh",
+           "nginx", "postgresql", "xinetd", "tftpd-hpa", "dnsmasq"]
+
+[[tool]]
+name = "nmap"
+cat = "information-gathering"
+tier = "top10"
+src = "apt"
+about = "Network discovery and port scanning"
+
+[[tool]]
+name = "wireshark"
+cat = "sniffing-spoofing"
+tier = "top10"
+src = "apt"
+gui = true
+about = "Network protocol analyser"
+
+[[tool]]
+name = "aircrack-ng"
+cat = "wireless"
+tier = "top10"
+src = "apt"
+bin = ["aircrack-ng", "airodump-ng", "aireplay-ng", "airmon-ng"]
+about = "Wi-Fi security auditing suite"
+
+[[tool]]
+name = "hydra"
+cat = "passwords"
+tier = "top10"
+src = "apt"
+about = "Online login brute-forcing for many protocols"
+
+[[tool]]
+name = "john"
+cat = "passwords"
+tier = "top10"
+src = "apt"
+about = "John the Ripper password cracker"
+
+[[tool]]
+name = "sqlmap"
+cat = "database"
+tier = "top10"
+src = "apt"
+about = "Automatic SQL injection detection and exploitation"
+
+[[tool]]
+name = "netexec"
+cat = "exploitation"
+tier = "top10"
+src = "pipx"
+pkg = "git+https://github.com/Pennyw0rth/NetExec"
+deps = ["gcc", "python3-dev"]  # netifaces and arc4 have no wheels for Python 3.14 yet
+bin = ["netexec", "nxc"]
+replaces = ["crackmapexec"]
+about = "Network service execution and AD assessment (maintained successor of CrackMapExec)"
+
+[[tool]]
+name = "msfconsole"
+cat = "exploitation"
+tier = "top10"
+src = "kali"
+pkg = "metasploit-framework"
+bin = ["msfconsole", "msfvenom"]
+about = "Metasploit Framework"
+
+[[tool]]
+name = "burpsuite"
+cat = "web"
+tier = "top10"
+src = "kali"
+gui = true
+about = "Burp Suite Community web proxy"
+
+[[tool]]
+name = "responder"
+cat = "sniffing-spoofing"
+tier = "top10"
+src = "kali"
+about = "LLMNR/NBT-NS/mDNS poisoner"
+
+# --- Information gathering --------------------------------------------------
+
+[[tool]]
+name = "zenmap"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+gui = true
+about = "Graphical front end for nmap"
+
+[[tool]]
+name = "rustscan"
+cat = "information-gathering"
+tier = "default"
+src = "kali"
+about = "Fast port scanner that hands results to nmap"
+
+[[tool]]
+name = "naabu"
+cat = "information-gathering"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/naabu"
+deps = ["libpcap0.8t64"]
+about = "Fast SYN/CONNECT port scanner"
+
+[[tool]]
+name = "masscan"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Internet-scale port scanner"
+
+[[tool]]
+name = "zmap"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Single-packet network scanner"
+
+[[tool]]
+name = "subfinder"
+cat = "information-gathering"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/subfinder"
+replaces = ["sublist3r"]
+about = "Passive subdomain discovery"
+
+[[tool]]
+name = "dnsx"
+cat = "information-gathering"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/dnsx"
+about = "Fast multi-purpose DNS toolkit"
+
+[[tool]]
+name = "amass"
+cat = "information-gathering"
+tier = "default"
+src = "kali"
+about = "OWASP attack-surface mapping"
+
+[[tool]]
+name = "theharvester"
+cat = "information-gathering"
+tier = "default"
+src = "pipx"
+pkg = "git+https://github.com/laramies/theHarvester"
+bin = ["theHarvester"]
+about = "Emails, names and subdomains from public sources"
+
+[[tool]]
+name = "recon-ng"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Modular web reconnaissance framework"
+
+[[tool]]
+name = "spiderfoot"
+cat = "information-gathering"
+tier = "default"
+src = "kali"
+about = "OSINT automation"
+
+[[tool]]
+name = "dnsrecon"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "DNS enumeration"
+
+[[tool]]
+name = "dnsenum"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "DNS enumeration"
+
+[[tool]]
+name = "fierce"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "DNS reconnaissance"
+
+[[tool]]
+name = "dmitry"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Deepmagic information gathering"
+
+[[tool]]
+name = "netdiscover"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "ARP host discovery"
+
+[[tool]]
+name = "arp-scan"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "ARP scanner"
+
+[[tool]]
+name = "fping"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Ping many hosts at once"
+
+[[tool]]
+name = "hping3"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "Packet crafting and probing"
+
+[[tool]]
+name = "nbtscan"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "NetBIOS name scanner"
+
+[[tool]]
+name = "enum4linux-ng"
+cat = "information-gathering"
+tier = "default"
+src = "pipx"
+pkg = "git+https://github.com/cddmp/enum4linux-ng"
+replaces = ["enum4linux"]
+about = "Windows/Samba enumeration (rewrite of enum4linux)"
+
+[[tool]]
+name = "smbmap"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "SMB share enumeration"
+
+[[tool]]
+name = "onesixtyone"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "SNMP scanner"
+
+[[tool]]
+name = "snmpwalk"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+pkg = "snmp"
+bin = ["snmpwalk", "snmpget"]
+about = "SNMP query tools"
+
+[[tool]]
+name = "ike-scan"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+about = "IPsec VPN discovery"
+
+[[tool]]
+name = "thc-ipv6"
+cat = "information-gathering"
+tier = "default"
+src = "apt"
+bin = ["atk6-alive6"]
+about = "IPv6 attack toolkit"
+
+[[tool]]
+name = "lbd"
+cat = "information-gathering"
+tier = "default"
+src = "kali"
+about = "Load-balancer detection"
+
+# --- Vulnerability analysis ---------------------------------------------------
+
+[[tool]]
+name = "nuclei"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/nuclei"
+replaces = ["nikto (for template-based checks)"]
+about = "Template-based vulnerability scanner"
+
+[[tool]]
+name = "nikto"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "apt"
+about = "Web server scanner"
+
+[[tool]]
+name = "sslscan"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "apt"
+about = "TLS configuration scanner"
+
+[[tool]]
+name = "testssl.sh"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "apt"
+pkg = "testssl.sh"
+bin = ["testssl"]
+about = "TLS/SSL checks from the command line"
+
+[[tool]]
+name = "sslyze"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "pipx"
+about = "Fast TLS scanner"
+
+[[tool]]
+name = "spike"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "apt"
+bin = ["generic_send_tcp"]
+about = "Network protocol fuzzer"
+
+[[tool]]
+name = "gitleaks"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "apt"
+about = "Find secrets in git repositories"
+
+[[tool]]
+name = "trufflehog"
+cat = "vulnerability-analysis"
+tier = "default"
+src = "github"
+pkg = "trufflesecurity/trufflehog"
+about = "Find and verify leaked credentials"
+
+# --- Web ---------------------------------------------------------------------
+
+[[tool]]
+name = "httpx"
+cat = "web"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/httpx"
+bin = ["httpx"]
+about = "HTTP probing toolkit"
+
+[[tool]]
+name = "katana"
+cat = "web"
+tier = "default"
+src = "github"
+pkg = "projectdiscovery/katana"
+about = "Modern web crawler"
+
+[[tool]]
+name = "ffuf"
+cat = "web"
+tier = "default"
+src = "apt"
+replaces = ["dirb", "dirbuster"]
+about = "Fast web fuzzer"
+
+[[tool]]
+name = "feroxbuster"
+cat = "web"
+tier = "default"
+src = "kali"
+replaces = ["dirb", "dirbuster"]
+about = "Recursive content discovery"
+
+[[tool]]
+name = "gobuster"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Directory, DNS and vhost brute-forcing"
+
+[[tool]]
+name = "dirb"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Classic web content scanner (see ffuf, feroxbuster)"
+
+[[tool]]
+name = "wfuzz"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Web application fuzzer"
+
+[[tool]]
+name = "whatweb"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Web technology fingerprinting"
+
+[[tool]]
+name = "wafw00f"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Web application firewall detection"
+
+[[tool]]
+name = "wpscan"
+cat = "web"
+tier = "default"
+src = "kali"
+about = "WordPress security scanner"
+
+[[tool]]
+name = "zaproxy"
+cat = "web"
+tier = "default"
+src = "kali"
+gui = true
+about = "OWASP ZAP web scanner and proxy"
+
+[[tool]]
+name = "mitmproxy"
+cat = "web"
+tier = "default"
+src = "apt"
+bin = ["mitmproxy", "mitmweb", "mitmdump"]
+about = "Interactive HTTPS proxy"
+
+[[tool]]
+name = "cutycapt"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Web page screenshots"
+
+[[tool]]
+name = "cadaver"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "WebDAV client"
+
+[[tool]]
+name = "davtest"
+cat = "web"
+tier = "default"
+src = "kali"
+about = "WebDAV server testing"
+
+[[tool]]
+name = "commix"
+cat = "web"
+tier = "default"
+src = "kali"
+about = "Command injection testing"
+
+[[tool]]
+name = "skipfish"
+cat = "web"
+tier = "default"
+src = "kali"
+about = "Web application reconnaissance"
+
+[[tool]]
+name = "weevely"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Web shell for authorised post-exploitation"
+
+[[tool]]
+name = "cewl"
+cat = "web"
+tier = "default"
+src = "apt"
+about = "Wordlist generator from web pages"
+
+# --- Database ----------------------------------------------------------------
+
+[[tool]]
+name = "sqlitebrowser"
+cat = "database"
+tier = "default"
+src = "apt"
+gui = true
+about = "DB Browser for SQLite"
+
+# --- Passwords ---------------------------------------------------------------
+
+[[tool]]
+name = "hashcat"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "GPU password recovery"
+
+[[tool]]
+name = "name-that-hash"
+cat = "passwords"
+tier = "default"
+src = "pipx"
+bin = ["nth"]
+replaces = ["hash-identifier"]
+about = "Modern hash identification"
+
+[[tool]]
+name = "hashid"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Hash type identification"
+
+[[tool]]
+name = "ophcrack"
+cat = "passwords"
+tier = "default"
+src = "apt"
+gui = true
+about = "Windows password cracker (rainbow tables)"
+
+[[tool]]
+name = "ophcrack-cli"
+cat = "passwords"
+tier = "default"
+src = "apt"
+bin = ["ophcrack-cli"]
+about = "ophcrack without the GUI"
+
+[[tool]]
+name = "crunch"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Wordlist generator"
+
+[[tool]]
+name = "maskprocessor"
+cat = "passwords"
+tier = "default"
+src = "apt"
+bin = ["mp64"]
+about = "Mask-based wordlist generator"
+
+[[tool]]
+name = "statsprocessor"
+cat = "passwords"
+tier = "default"
+src = "apt"
+bin = ["sp64"]
+about = "Markov-chain wordlist generator"
+
+[[tool]]
+name = "patator"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Multi-purpose brute-forcer"
+
+[[tool]]
+name = "medusa"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Parallel login brute-forcer"
+
+[[tool]]
+name = "ncrack"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Network authentication cracker"
+
+[[tool]]
+name = "chntpw"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Offline Windows password editor"
+
+[[tool]]
+name = "samdump2"
+cat = "passwords"
+tier = "default"
+src = "apt"
+about = "Dump Windows password hashes"
+
+[[tool]]
+name = "creddump7"
+cat = "passwords"
+tier = "default"
+src = "apt"
+bin = ["pwdump", "cachedump", "lsadump"]
+about = "Extract credentials from registry hives"
+
+[[tool]]
+name = "wordlists"
+cat = "passwords"
+tier = "default"
+src = "kali"
+pkg = "wordlists seclists"
+bin = []
+about = "rockyou and SecLists wordlists (in the Kali container under /usr/share)"
+
+# --- Wireless ----------------------------------------------------------------
+
+[[tool]]
+name = "wifite"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "Automated Wi-Fi auditing"
+
+[[tool]]
+name = "reaver"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "WPS PIN attacks"
+
+[[tool]]
+name = "bully"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "WPS brute-force"
+
+[[tool]]
+name = "pixiewps"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "Offline WPS (Pixie Dust)"
+
+[[tool]]
+name = "hcxtools"
+cat = "wireless"
+tier = "default"
+src = "apt"
+bin = ["hcxpcapngtool"]
+about = "Convert Wi-Fi captures for hashcat"
+
+[[tool]]
+name = "hcxdumptool"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "Capture Wi-Fi handshakes and PMKIDs"
+
+[[tool]]
+name = "kismet"
+cat = "wireless"
+tier = "default"
+src = "kali"
+about = "Wireless network detector and sniffer"
+
+[[tool]]
+name = "fern-wifi-cracker"
+cat = "wireless"
+tier = "default"
+src = "kali"
+gui = true
+about = "Graphical Wi-Fi auditing"
+
+[[tool]]
+name = "macchanger"
+cat = "wireless"
+tier = "default"
+src = "apt"
+about = "Change MAC addresses"
+
+[[tool]]
+name = "bluez"
+cat = "wireless"
+tier = "default"
+src = "apt"
+bin = ["bluetoothctl", "hcitool"]
+about = "Bluetooth tools"
+
+[[tool]]
+name = "spooftooph"
+cat = "wireless"
+tier = "default"
+src = "kali"
+about = "Bluetooth device spoofing"
+
+# --- Reverse engineering -------------------------------------------------------
+
+[[tool]]
+name = "radare2"
+cat = "reverse-engineering"
+tier = "default"
+src = "apt"
+bin = ["r2", "radare2"]
+about = "Reverse-engineering framework"
+
+[[tool]]
+name = "ghidra"
+cat = "reverse-engineering"
+tier = "default"
+src = "kali"
+gui = true
+about = "NSA's software reverse-engineering suite"
+
+[[tool]]
+name = "gdb"
+cat = "reverse-engineering"
+tier = "default"
+src = "apt"
+about = "GNU debugger"
+
+[[tool]]
+name = "ropper"
+cat = "reverse-engineering"
+tier = "default"
+src = "kali"
+about = "ROP gadget finder (Kali's build: the PyPI release doesn't run on Python 3.14 yet)"
+
+[[tool]]
+name = "nasm"
+cat = "reverse-engineering"
+tier = "default"
+src = "apt"
+about = "Assembler"
+
+[[tool]]
+name = "binwalk"
+cat = "reverse-engineering"
+tier = "default"
+src = "apt"
+about = "Firmware analysis"
+
+[[tool]]
+name = "upx"
+cat = "reverse-engineering"
+tier = "default"
+src = "apt"
+pkg = "upx-ucl"
+about = "Executable packer"
+
+# --- Exploitation --------------------------------------------------------------
+
+[[tool]]
+name = "searchsploit"
+cat = "exploitation"
+tier = "default"
+src = "kali"
+pkg = "exploitdb"
+about = "Search the Exploit-DB archive offline"
+
+[[tool]]
+name = "setoolkit"
+cat = "social-engineering"
+tier = "default"
+src = "kali"
+pkg = "set"
+about = "Social-Engineer Toolkit"
+
+[[tool]]
+name = "gophish"
+cat = "social-engineering"
+tier = "default"
+src = "kali"
+about = "Phishing simulation for awareness programmes"
+
+[[tool]]
+name = "powershell-empire"
+cat = "post-exploitation"
+tier = "default"
+src = "kali"
+bin = ["powershell-empire"]
+about = "Post-exploitation framework (server)"
+
+[[tool]]
+name = "starkiller"
+cat = "post-exploitation"
+tier = "default"
+src = "kali"
+gui = true
+about = "Graphical client for Empire"
+
+[[tool]]
+name = "impacket"
+cat = "exploitation"
+tier = "default"
+src = "pipx"
+bin = ["secretsdump.py", "psexec.py", "wmiexec.py", "GetUserSPNs.py"]
+about = "Windows network protocols and the classic impacket scripts"
+
+[[tool]]
+name = "certipy"
+cat = "exploitation"
+tier = "default"
+src = "pipx"
+pkg = "certipy-ad"
+about = "Active Directory Certificate Services assessment"
+
+[[tool]]
+name = "bloodhound-ce-python"
+cat = "information-gathering"
+tier = "default"
+src = "pipx"
+pkg = "bloodhound-ce"
+bin = ["bloodhound-ce-python"]
+replaces = ["bloodhound-python"]
+about = "Data collector for BloodHound Community Edition"
+
+[[tool]]
+name = "bloodhound"
+cat = "information-gathering"
+tier = "default"
+src = "kali"
+gui = true
+about = "BloodHound Community Edition (AD attack paths)"
+
+[[tool]]
+name = "bloodyad"
+cat = "exploitation"
+tier = "default"
+src = "pipx"
+about = "Active Directory privilege escalation toolkit"
+
+[[tool]]
+name = "evil-winrm"
+cat = "post-exploitation"
+tier = "default"
+src = "kali"
+about = "WinRM shell"
+
+[[tool]]
+name = "payload-collections"
+cat = "post-exploitation"
+tier = "default"
+src = "kali"
+pkg = "webshells laudanum powersploit windows-binaries peass mimikatz wce"
+bin = []
+about = "Kali's payload and script collections (in the Kali container under /usr/share)"
+
+# --- Sniffing & spoofing -------------------------------------------------------
+
+[[tool]]
+name = "bettercap"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+replaces = ["ettercap (for most uses)"]
+about = "Network attack and monitoring framework"
+
+[[tool]]
+name = "tcpdump"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "Packet capture"
+
+[[tool]]
+name = "tshark"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "Wireshark on the command line"
+
+[[tool]]
+name = "ngrep"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "grep for network traffic"
+
+[[tool]]
+name = "netsniff-ng"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "High-performance packet toolkit"
+
+[[tool]]
+name = "dnschef"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "kali"
+about = "DNS proxy for testing"
+
+[[tool]]
+name = "sslsplit"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "TLS interception"
+
+[[tool]]
+name = "tcpreplay"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "Replay captured traffic"
+
+[[tool]]
+name = "scapy"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+pkg = "python3-scapy"
+bin = ["scapy"]
+about = "Interactive packet manipulation"
+
+[[tool]]
+name = "inetsim"
+cat = "sniffing-spoofing"
+tier = "default"
+src = "apt"
+about = "Simulated internet services for malware labs"
+
+# --- Post exploitation and tunnelling ------------------------------------------
+
+[[tool]]
+name = "chisel"
+cat = "post-exploitation"
+tier = "default"
+src = "github"
+pkg = "jpillora/chisel"
+about = "TCP/UDP tunnelling over HTTP"
+
+[[tool]]
+name = "proxychains4"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+bin = ["proxychains4"]
+about = "Route programs through proxies"
+
+[[tool]]
+name = "sshuttle"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "VPN over SSH"
+
+[[tool]]
+name = "socat"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "Multipurpose relay"
+
+[[tool]]
+name = "ncat"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "Netcat from the nmap project"
+
+[[tool]]
+name = "iodine"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "IP over DNS tunnelling"
+
+[[tool]]
+name = "dns2tcp"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+bin = ["dns2tcpc"]
+about = "TCP over DNS"
+
+[[tool]]
+name = "ptunnel"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "TCP over ICMP"
+
+[[tool]]
+name = "proxytunnel"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "Tunnel through HTTPS proxies"
+
+[[tool]]
+name = "sbd"
+cat = "post-exploitation"
+tier = "default"
+src = "apt"
+about = "Encrypted netcat clone"
+
+# --- Forensics -----------------------------------------------------------------
+
+[[tool]]
+name = "autopsy"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "Digital forensics platform (web UI)"
+
+[[tool]]
+name = "sleuthkit"
+cat = "forensics"
+tier = "default"
+src = "apt"
+bin = ["fls", "mmls", "icat"]
+about = "File-system forensics"
+
+[[tool]]
+name = "volatility3"
+cat = "forensics"
+tier = "default"
+src = "pipx"
+bin = ["vol"]
+replaces = ["volatility (2)"]
+about = "Memory forensics"
+
+[[tool]]
+name = "guymager"
+cat = "forensics"
+tier = "default"
+src = "apt"
+gui = true
+about = "Forensic disk imaging"
+
+[[tool]]
+name = "bulk-extractor"
+cat = "forensics"
+tier = "default"
+src = "kali"
+pkg = "bulk-extractor"
+bin = ["bulk_extractor"]
+about = "Extract features from disk images"
+
+[[tool]]
+name = "foremost"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "File carving"
+
+[[tool]]
+name = "scalpel"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "File carving"
+
+[[tool]]
+name = "testdisk"
+cat = "forensics"
+tier = "default"
+src = "apt"
+bin = ["testdisk", "photorec"]
+about = "Partition and file recovery"
+
+[[tool]]
+name = "magicrescue"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "File recovery by magic bytes"
+
+[[tool]]
+name = "hashdeep"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "Recursive hashing and audit"
+
+[[tool]]
+name = "exiftool"
+cat = "forensics"
+tier = "default"
+src = "apt"
+pkg = "libimage-exiftool-perl"
+about = "Read and write file metadata"
+
+[[tool]]
+name = "yara"
+cat = "forensics"
+tier = "default"
+src = "apt"
+about = "Pattern matching for malware research"
+
+[[tool]]
+name = "pdfid"
+cat = "forensics"
+tier = "default"
+src = "kali"
+about = "Triage PDF files (the PyPI package installs no command)"
+
+# --- Reporting -----------------------------------------------------------------
+
+[[tool]]
+name = "faraday"
+cat = "reporting"
+tier = "default"
+src = "kali"
+pkg = "faraday"
+bin = ["faraday-manage"]
+about = "Collaborative pentest reporting"
+
+[[tool]]
+name = "pipal"
+cat = "reporting"
+tier = "default"
+src = "kali"
+about = "Password statistics"
+
+# --- Supporting tools (what Kali's default set also installs) ------------------
+# Services among these are installed but left off (see [services]).
+
+[[tool]]
+name = "support-utilities"
+cat = "support"
+tier = "default"
+src = "apt"
+pkg = "7zip axel bind9-dnsutils exiv2 i2c-tools rfkill scrounge-ntfs cifs-utils clang dos2unix ethtool expect gdisk git iw minicom netmask ncurses-hexedit pipx plocate python3-pip python3-virtualenv screen smbclient swaks sendemail tcpick telnet tftp-hpa traceroute unrar vim whois xxd arping ifenslave netsed udptunnel vlan vpnc openvpn redsocks stunnel4 sslh ssldump miredo php php-mysql rake"
+bin = []
+about = "Shell, network, archive and scripting utilities Kali includes"
+
+[[tool]]
+name = "lab-servers"
+cat = "support"
+tier = "default"
+src = "apt"
+pkg = "apache2 default-mysql-server samba samba-common-bin snmpd atftpd"
+bin = []
+about = "Servers for labs and file transfer, installed but not started"
+
+[[tool]]
+name = "impacket-scripts"
+cat = "exploitation"
+tier = "default"
+src = "apt"
+pkg = "python3-impacket"
+bin = []
+about = "Impacket as a system Python library (the pipx 'impacket' entry provides the scripts)"
+
+[[tool]]
+name = "kali-extras"
+cat = "support"
+tier = "default"
+src = "kali"
+pkg = "binwalk3 cryptcat dbd exe2hexbat gpp-decrypt hashcat-utils hydra-gtk legion msfpc multimac passing-the-hash pdf-parser powershell pwnat qsslcaudit rebind rsmangler sakis3g snmpcheck thc-pptp-bruter unix-privesc-check voiphopper"
+bin = ["binwalk3", "cryptcat", "gpp-decrypt", "legion", "msfpc", "pdf-parser", "pwsh", "rsmangler", "snmpcheck", "unix-privesc-check"]
+about = "The rest of Kali's default set: older or niche tools, kept in the Kali container"
+
+# Kali default packages Ambar deliberately leaves out, with the reason.
+[excluded]
+cryptsetup = "already part of Ambar OS (disk encryption in the installer)"
+cryptsetup-initramfs = "already part of Ambar OS; changes the boot process"
+cryptsetup-nuke-password = "Kali-specific boot change; not something to install with a toolkit"
+vboot-kernel-utils = "Chromebook kernel signing; Kali hardware support, not a security tool"
+vboot-utils = "Chromebook firmware utilities; Kali hardware support, not a security tool"
+hotpatch = "obsolete Windows binary patcher, unmaintained since 2012"
