@@ -528,6 +528,22 @@ impl Engine {
         self.set_state(id, WorkflowState::Inactive)
     }
 
+    /// Removes a workflow entirely: stops its trigger, aborts a run in progress
+    /// at its next action boundary, deletes the definition and the grant.
+    /// Execution history and the audit log are kept.
+    pub fn remove(&self, id: &str) -> Result<()> {
+        let slot = self
+            .slots()?
+            .remove(id)
+            .ok_or_else(|| EngineError::NotFound(id.into()))?;
+        slot.cancel.cancel();
+        slot.state_tx.send_replace(WorkflowState::Cancelled);
+        self.inner.store.delete_workflow(id)?;
+        self.inner.store.revoke_grant(id)?;
+        self.inner.store.audit(id, "removed", "")?;
+        Ok(())
+    }
+
     /// Whether a run of this workflow is in progress right now.
     pub fn is_running(&self, id: &str) -> Result<bool> {
         let slots = self.slots()?;
@@ -581,6 +597,12 @@ impl Engine {
 
     /// Runs an active manual or scheduled workflow immediately and waits for it.
     pub async fn run_now(&self, id: &str) -> Result<ExecutionRecord> {
+        self.run_now_as(id, "manual").await
+    }
+
+    /// Like [`Engine::run_now`], recording `trigger` (e.g. `agent:agent-1a2b`)
+    /// as what started the run.
+    pub async fn run_now_as(&self, id: &str, trigger: &str) -> Result<ExecutionRecord> {
         let workflow = self.workflow(id)?;
         if workflow.trigger.provides_file() {
             return Err(EngineError::State(format!(
@@ -595,7 +617,7 @@ impl Engine {
                 )));
             }
         }
-        self.execute(id, "manual".into(), Vars::new(), None, Overlap::Reject)
+        self.execute(id, trigger.into(), Vars::new(), None, Overlap::Reject)
             .await?
             .ok_or_else(|| EngineError::State(format!("`{id}` was cancelled before it ran")))
     }

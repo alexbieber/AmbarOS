@@ -1,0 +1,6 @@
+name = "dev.ambar.daily-notes"
+version = "1.0.0"
+description = "Starts a dated notes file every weekday morning"
+author = "Ambar Examples"
+license = "Apache-2.0"
+workflows = ["workflows/daily-note.toml"]

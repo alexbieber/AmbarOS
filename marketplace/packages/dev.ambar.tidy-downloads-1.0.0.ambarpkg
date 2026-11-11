@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "manifest": {
+    "name": "dev.ambar.tidy-downloads",
+    "version": "1.0.0",
+    "description": "Files new PDFs and images from Downloads into dated folders",
+    "author": "Ambar Examples",
+    "license": "Apache-2.0",
+    "homepage": "https://github.com/alexbieber/AmbarOS",
+    "workflows": [
+      "workflows/file-documents.toml",
+      "workflows/file-images.toml"
+    ]
+  },
+  "files": {
+    "workflows/file-documents.toml": "id = \"tidy-downloads-documents\"\nname = \"File downloaded documents\"\n\n[trigger]\ntype = \"folder_watch\"\npath = \"~/Downloads\"\n\n[[conditions]]\ntype = \"file_extension\"\nany_of = [\"pdf\", \"docx\", \"xlsx\", \"pptx\"]\n\n[[actions]]\ntype = \"move_file\"\nto_dir = \"~/Documents/Downloads/{file_ext}/{date}\"\n\n[[actions]]\ntype = \"notify\"\ntitle = \"Filed {file_name}\"\nbody = \"Moved to Documents/Downloads/{file_ext}\"\n\n[permissions]\nwrite = [\"~/Downloads\", \"~/Documents/Downloads\"]\nnotify = true\n",
+    "workflows/file-images.toml": "id = \"tidy-downloads-images\"\nname = \"File downloaded images\"\n\n[trigger]\ntype = \"folder_watch\"\npath = \"~/Downloads\"\n\n[[conditions]]\ntype = \"file_extension\"\nany_of = [\"png\", \"jpg\", \"jpeg\", \"gif\", \"webp\", \"heic\"]\n\n[[actions]]\ntype = \"move_file\"\nto_dir = \"~/Pictures/Downloads/{date}\"\n\n[permissions]\nwrite = [\"~/Downloads\", \"~/Pictures/Downloads\"]\n"
+  },
+  "signature": {
+    "publisher": "Ambar Examples",
+    "public_key": "8bc227166b64ec1c019b02eb6774bd6fa4f791d6ed7f40a503b64a86d9bd9e2d",
+    "signature": "ead7481922a4c7e8deee3abb60c650cf61738b23fe9a1e792fd254693df96ba17c1c87d5a1596a30497d59ae4a730eacfa2e4de7b4937969f6177a884bae5209"
+  }
+}

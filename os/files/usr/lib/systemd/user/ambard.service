@@ -1,0 +1,17 @@
+[Unit]
+Description=Ambar automation service
+Documentation=https://github.com/alexbieber/AmbarOS/blob/main/docs/service.md
+After=graphical-session-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ambard
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

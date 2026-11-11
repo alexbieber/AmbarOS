@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "manifest": {
+    "name": "dev.ambar.screenshot-sorter",
+    "version": "1.0.0",
+    "description": "Moves new screenshots off the Desktop into Pictures/Screenshots by date",
+    "author": "Ambar Examples",
+    "license": "Apache-2.0",
+    "homepage": "",
+    "workflows": [
+      "workflows/sort-screenshots.toml"
+    ]
+  },
+  "files": {
+    "workflows/sort-screenshots.toml": "id = \"sort-screenshots\"\nname = \"Sort screenshots\"\n\n[trigger]\ntype = \"folder_watch\"\npath = \"~/Desktop\"\npattern = \"Screenshot*\"\n\n[[conditions]]\ntype = \"file_extension\"\nany_of = [\"png\", \"jpg\"]\n\n[[actions]]\ntype = \"move_file\"\nto_dir = \"~/Pictures/Screenshots/{date}\"\n\n[permissions]\nwrite = [\"~/Desktop\", \"~/Pictures/Screenshots\"]\n"
+  },
+  "signature": {
+    "publisher": "Ambar Examples",
+    "public_key": "8bc227166b64ec1c019b02eb6774bd6fa4f791d6ed7f40a503b64a86d9bd9e2d",
+    "signature": "935cd21dc5bd452ab7476a74b5c122251a8a9d91044f1503969ad618e3933de7f158491e6595144ee703c6565bff1933c0b3f9c95795d22062075db78bd92805"
+  }
+}

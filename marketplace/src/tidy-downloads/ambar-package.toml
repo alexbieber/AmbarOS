@@ -1,0 +1,7 @@
+name = "dev.ambar.tidy-downloads"
+version = "1.0.0"
+description = "Files new PDFs and images from Downloads into dated folders"
+author = "Ambar Examples"
+license = "Apache-2.0"
+homepage = "https://github.com/alexbieber/AmbarOS"
+workflows = ["workflows/file-documents.toml", "workflows/file-images.toml"]

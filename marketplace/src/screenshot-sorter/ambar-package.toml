@@ -1,0 +1,6 @@
+name = "dev.ambar.screenshot-sorter"
+version = "1.0.0"
+description = "Moves new screenshots off the Desktop into Pictures/Screenshots by date"
+author = "Ambar Examples"
+license = "Apache-2.0"
+workflows = ["workflows/sort-screenshots.toml"]

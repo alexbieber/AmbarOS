@@ -1,0 +1,17 @@
+id = "tidy-downloads-images"
+name = "File downloaded images"
+
+[trigger]
+type = "folder_watch"
+path = "~/Downloads"
+
+[[conditions]]
+type = "file_extension"
+any_of = ["png", "jpg", "jpeg", "gif", "webp", "heic"]
+
+[[actions]]
+type = "move_file"
+to_dir = "~/Pictures/Downloads/{date}"
+
+[permissions]
+write = ["~/Downloads", "~/Pictures/Downloads"]

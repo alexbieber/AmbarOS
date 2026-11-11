@@ -1,0 +1,7 @@
+# bootc-image-builder config for the installer ISO (Anaconda).
+# The installer asks for language, disk and the first user interactively.
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Localization",
+  "org.fedoraproject.Anaconda.Modules.Users",
+]

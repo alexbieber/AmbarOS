@@ -15,6 +15,8 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::agents::{AgentError, AgentStore, Principal, Scope, authorize};
+use crate::approvals::ApprovalBroker;
 use crate::auth::{authorize_peer, constant_time_eq, generate_token, write_token};
 use crate::paths::{InstanceLock, PathError, ServicePaths, current_uid};
 use crate::protocol::{
@@ -47,6 +49,10 @@ pub struct DaemonConfig {
     pub approver: Arc<dyn Approver>,
     /// How long shutdown waits for in-progress runs.
     pub grace: Duration,
+    /// When set, sensitive actions that are not pre-approved wait this long
+    /// for the owner to allow them (live approvals) instead of using
+    /// `approver`. No answer means deny.
+    pub live_approvals: Option<Duration>,
 }
 
 impl DaemonConfig {
@@ -62,6 +68,7 @@ impl DaemonConfig {
             notifier,
             approver,
             grace: Duration::from_secs(30),
+            live_approvals: None,
         }
     }
 }
@@ -86,6 +93,9 @@ pub enum DaemonError {
     /// Random number generator failure.
     #[error("could not generate an auth token: {0}")]
     Token(String),
+    /// Agent registry problem.
+    #[error(transparent)]
+    Agents(#[from] AgentError),
 }
 
 #[derive(Debug)]
@@ -99,6 +109,8 @@ struct Shared {
     recovered: usize,
     restore_failures: Mutex<Vec<RestoreFailure>>,
     shutdown: CancellationToken,
+    agents: AgentStore,
+    broker: Option<Arc<ApprovalBroker>>,
 }
 
 /// A started daemon.
@@ -150,7 +162,18 @@ pub async fn start(config: DaemonConfig) -> Result<RunningDaemon, DaemonError> {
         .executions(None, 10_000)
         .map(|r| r.iter().filter(|e| e.status.as_str() == "running").count())
         .unwrap_or(0);
-    let engine = Engine::new(store, config.notifier, config.approver, config.engine)?;
+    let broker = config.live_approvals.map(|timeout| {
+        Arc::new(ApprovalBroker::new(
+            timeout,
+            config.notifier.clone(),
+            store.clone(),
+        ))
+    });
+    let approver: Arc<dyn ambar_automation::Approver> = match &broker {
+        Some(b) => b.clone(),
+        None => config.approver.clone(),
+    };
+    let engine = Engine::new(store, config.notifier, approver, config.engine)?;
 
     let token = generate_token().map_err(|e| DaemonError::Token(e.to_string()))?;
     write_token(&paths.token(), &token)?;
@@ -165,6 +188,8 @@ pub async fn start(config: DaemonConfig) -> Result<RunningDaemon, DaemonError> {
         recovered: interrupted_before,
         restore_failures: Mutex::new(Vec::new()),
         shutdown: CancellationToken::new(),
+        agents: AgentStore::open(&paths.db())?,
+        broker,
     });
 
     let restored = restore(&shared);
@@ -303,6 +328,9 @@ async fn serve(
     drop(listener);
     let _ = std::fs::remove_file(shared.paths.socket());
     let _ = std::fs::remove_file(shared.paths.token());
+    if let Some(b) = &shared.broker {
+        b.close(); // waiting approvals are denied so runs can finish
+    }
     let report = shared.engine.shutdown(grace).await;
     service_audit(
         &shared,
@@ -343,17 +371,26 @@ async fn handle_connection(shared: Arc<Shared>, stream: UnixStream) {
     }
 
     // Authenticate.
-    let client = match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut reader)).await {
+    let (client, principal) = match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut reader))
+        .await
+    {
         Ok(Ok(Some(line))) => match serde_json::from_str::<Request>(&line) {
             Ok(Request::Hello {
                 token,
                 protocol,
                 client,
             }) => {
-                if !constant_time_eq(&token, &shared.token) {
-                    let _ = write_frame(&mut write_half, &deny("invalid token")).await;
-                    return;
-                }
+                let principal = if constant_time_eq(&token, &shared.token) {
+                    Principal::Owner
+                } else {
+                    match shared.agents.authenticate(&token) {
+                        Ok(Some(agent)) => Principal::Agent(agent),
+                        _ => {
+                            let _ = write_frame(&mut write_half, &deny("invalid token")).await;
+                            return;
+                        }
+                    }
+                };
                 if protocol != PROTOCOL_VERSION {
                     let msg =
                         format!("protocol mismatch: client {protocol}, service {PROTOCOL_VERSION}");
@@ -362,7 +399,7 @@ async fn handle_connection(shared: Arc<Shared>, stream: UnixStream) {
                             .await;
                     return;
                 }
-                client
+                (client, principal)
             }
             Ok(_) => {
                 let _ = write_frame(&mut write_half, &deny("first request must be hello")).await;
@@ -415,8 +452,10 @@ async fn handle_connection(shared: Arc<Shared>, stream: UnixStream) {
                 false,
             ),
             Ok(request) => {
-                let stop = matches!(request, Request::Shutdown);
-                (dispatch(&shared, request, &client, &pid).await, stop)
+                let is_shutdown = matches!(request, Request::Shutdown);
+                let response = dispatch(&shared, &principal, request, &client, &pid).await;
+                let stop = is_shutdown && response.ok;
+                (response, stop)
             }
             Err(e) => (
                 Response::err(ErrorCode::BadRequest, format!("invalid request: {e}")),
@@ -444,9 +483,71 @@ fn engine_error(e: &EngineError) -> Response {
     Response::err(code, e.to_string())
 }
 
-async fn dispatch(shared: &Shared, request: Request, client: &str, pid: &str) -> Response {
+async fn dispatch(
+    shared: &Shared,
+    principal: &Principal,
+    request: Request,
+    client: &str,
+    pid: &str,
+) -> Response {
     let engine = &shared.engine;
     let op = request.op();
+    let actor = principal.actor();
+    let target = target_of(&request);
+
+    // Re-read agent identities on every request: revocation and scope changes
+    // apply to connections that are already open.
+    let fresh;
+    let principal = match principal {
+        Principal::Owner => principal,
+        Principal::Agent(a) => match shared.agents.get(&a.id) {
+            Ok(current) if !current.revoked => {
+                fresh = Principal::Agent(current);
+                &fresh
+            }
+            _ => {
+                let _ = engine.store().audit(
+                    SERVICE_AUDIT_ID,
+                    "ipc.denied",
+                    &format!("actor={actor} client={client} pid={pid} reason=agent revoked"),
+                );
+                return Response::err(ErrorCode::Unauthenticated, "this agent has been revoked");
+            }
+        },
+    };
+
+    // Authorization, then per-agent rate limiting.
+    let allowed = authorize(principal, &request);
+    if let Principal::Agent(a) = principal {
+        match shared.agents.record(&a.id, allowed.is_ok()) {
+            Ok(true) => {}
+            Ok(false) => {
+                let _ = engine.store().audit(
+                    SERVICE_AUDIT_ID,
+                    "ipc.rate_limited",
+                    &format!("actor={actor} client={client} pid={pid} op={op}"),
+                );
+                return Response::err(
+                    ErrorCode::RateLimited,
+                    format!(
+                        "agent `{}` exceeded {} requests per minute",
+                        a.name,
+                        crate::agents::RATE_LIMIT_PER_MINUTE
+                    ),
+                );
+            }
+            Err(e) => return Response::err(ErrorCode::Internal, e.to_string()),
+        }
+    }
+    if let Err(msg) = allowed {
+        let _ = engine.store().audit(
+            SERVICE_AUDIT_ID,
+            "ipc.forbidden",
+            &format!("actor={actor} client={client} pid={pid} op={op}{target} reason={msg}"),
+        );
+        return Response::err(ErrorCode::Forbidden, msg);
+    }
+
     let audit_id = match &request {
         Request::Enable { id }
         | Request::Disable { id }
@@ -454,7 +555,8 @@ async fn dispatch(shared: &Shared, request: Request, client: &str, pid: &str) ->
         | Request::Resume { id }
         | Request::Cancel { id }
         | Request::RunNow { id }
-        | Request::Revoke { id } => id.clone(),
+        | Request::Revoke { id }
+        | Request::Remove { id } => id.clone(),
         Request::Register { definition, .. } => Workflow::from_toml(definition)
             .map(|w| w.id)
             .unwrap_or_else(|_| SERVICE_AUDIT_ID.into()),
@@ -486,6 +588,7 @@ async fn dispatch(shared: &Shared, request: Request, client: &str, pid: &str) ->
         Request::Pause { id } => unit(engine.pause(&id)),
         Request::Resume { id } => unit(engine.resume(&id)),
         Request::Cancel { id } => unit(engine.cancel(&id)),
+        Request::Remove { id } => unit(engine.remove(&id)),
         Request::Revoke { id } => match engine.workflow(&id) {
             Ok(_) => match engine.revoke_permissions(&id) {
                 Ok(removed) => Response::ok(serde_json::json!({ "revoked": removed })),
@@ -493,11 +596,12 @@ async fn dispatch(shared: &Shared, request: Request, client: &str, pid: &str) ->
             },
             Err(e) => engine_error(&e),
         },
-        Request::RunNow { id } => match engine.run_now(&id).await {
+        Request::RunNow { id } => match engine.run_now_as(&id, &run_label(principal)).await {
             Ok(record) => Response::ok(record),
             Err(e) => engine_error(&e),
         },
         Request::Shutdown => Response::ok(serde_json::json!({ "stopping": true })),
+        other => agent_request(shared, principal, other),
     };
 
     if is_control {
@@ -508,10 +612,182 @@ async fn dispatch(shared: &Shared, request: Request, client: &str, pid: &str) ->
         let _ = engine.store().audit(
             &audit_id,
             &format!("ipc.{op}"),
-            &format!("client={client} pid={pid} result={result}"),
+            &format!("actor={actor} client={client} pid={pid}{target} result={result}"),
         );
     }
     response
+}
+
+fn run_label(principal: &Principal) -> String {
+    match principal {
+        Principal::Owner => "manual".into(),
+        Principal::Agent(a) => format!("agent:{}", a.id),
+    }
+}
+
+fn target_of(request: &Request) -> String {
+    match request {
+        Request::ProposalApprove { id, .. } | Request::ProposalReject { id } => {
+            format!(" proposal={id}")
+        }
+        Request::AgentRevoke { id } => format!(" agent={id}"),
+        Request::AgentCreate { name, scopes, .. } => {
+            format!(" agent_name={name} scopes={}", scopes.join(","))
+        }
+        Request::MemoryPut { key, .. } | Request::MemoryDelete { key } => format!(" key={key}"),
+        Request::ApprovalDecide { id, allow } => format!(" approval={id} allow={allow}"),
+        _ => String::new(),
+    }
+}
+
+fn agent_error(e: &AgentError) -> Response {
+    let code = match e {
+        AgentError::Invalid(_) => ErrorCode::BadRequest,
+        AgentError::NotFound(_) => ErrorCode::NotFound,
+        AgentError::Db(_) => ErrorCode::Internal,
+    };
+    Response::err(code, e.to_string())
+}
+
+fn ok_or<T: serde::Serialize>(r: Result<T, AgentError>) -> Response {
+    match r {
+        Ok(v) => Response::ok(v),
+        Err(e) => agent_error(&e),
+    }
+}
+
+/// Identity, agent and proposal operations. Authorization already passed.
+fn agent_request(shared: &Shared, principal: &Principal, request: Request) -> Response {
+    let engine = &shared.engine;
+    let agents = &shared.agents;
+    let me = match principal {
+        Principal::Agent(a) => Some(a),
+        Principal::Owner => None,
+    };
+    match request {
+        Request::WhoAmI => Response::ok(serde_json::json!({
+            "actor": principal.actor(),
+            "name": me.map(|a| a.name.clone()).unwrap_or_else(|| "owner".into()),
+            "scopes": me.map(|a| a.scopes.iter().map(Scope::to_string).collect::<Vec<_>>())
+                .unwrap_or_else(|| vec!["*".into()]),
+        })),
+        Request::History { workflow, limit } => {
+            match engine.history(workflow.as_deref(), limit.min(1000)) {
+                Ok(h) => Response::ok(h),
+                Err(e) => engine_error(&e),
+            }
+        }
+        Request::Propose { definition, reason } => {
+            let Some(agent) = me else {
+                return Response::err(ErrorCode::Forbidden, "only agents propose");
+            };
+            let wf = match Workflow::from_toml(&definition) {
+                Ok(w) => w,
+                Err(e) => return engine_error(&e),
+            };
+            if let Err(e) = engine.validate(&wf) {
+                return engine_error(&e);
+            }
+            let risks = ambar_automation::risk::review(&wf)
+                .into_iter()
+                .map(|r| format!("{:?}: {}", r.level, r.message).to_lowercase())
+                .collect();
+            ok_or(agents.propose(&agent.id, &wf.id, &definition, &reason, risks))
+        }
+        Request::ProposalList => ok_or(agents.proposals(me.map(|a| a.id.as_str()))),
+        Request::ProposalApprove {
+            id,
+            allow_sensitive,
+            enable,
+        } => {
+            let p = match agents.proposal(&id) {
+                Ok(p) if p.status == "pending" => p,
+                Ok(p) => {
+                    return Response::err(
+                        ErrorCode::State,
+                        format!("proposal `{id}` is already {}", p.status),
+                    );
+                }
+                Err(e) => return agent_error(&e),
+            };
+            let grant = Some(crate::protocol::GrantSpec { allow_sensitive });
+            let info = match register(shared, &p.definition, grant, true) {
+                Ok(i) => i,
+                Err(e) => return engine_error(&e),
+            };
+            if enable && let Err(e) = engine.activate(&info.id) {
+                return engine_error(&e);
+            }
+            let _ = engine.store().audit(
+                &info.id,
+                "proposal.approved",
+                &format!(
+                    "proposal={id} agent={} allow_sensitive={allow_sensitive}",
+                    p.agent_id
+                ),
+            );
+            ok_or(agents.decide(&id, true))
+        }
+        Request::ProposalReject { id } => ok_or(agents.decide(&id, false)),
+        Request::MemoryGet { key } => match me {
+            Some(a) => ok_or(agents.memory_get(&a.id, &key)),
+            None => Response::err(ErrorCode::Forbidden, "agents only"),
+        },
+        Request::MemoryPut { key, value } => match me {
+            Some(a) => ok_or(
+                agents
+                    .memory_put(&a.id, &key, &value)
+                    .map(|()| serde_json::json!({})),
+            ),
+            None => Response::err(ErrorCode::Forbidden, "agents only"),
+        },
+        Request::MemoryList => match me {
+            Some(a) => ok_or(agents.memory_keys(&a.id)),
+            None => Response::err(ErrorCode::Forbidden, "agents only"),
+        },
+        Request::MemoryDelete { key } => match me {
+            Some(a) => ok_or(
+                agents
+                    .memory_delete(&a.id, &key)
+                    .map(|d| serde_json::json!({ "deleted": d })),
+            ),
+            None => Response::err(ErrorCode::Forbidden, "agents only"),
+        },
+        Request::AgentCreate {
+            name,
+            description,
+            scopes,
+        } => {
+            let parsed: Result<Vec<Scope>, String> = scopes.iter().map(|s| s.parse()).collect();
+            match parsed {
+                Ok(scopes) => {
+                    ok_or(agents.create(&name, &description, scopes).map(
+                        |(agent, token)| serde_json::json!({ "agent": agent, "token": token }),
+                    ))
+                }
+                Err(e) => Response::err(ErrorCode::BadRequest, e),
+            }
+        }
+        Request::AgentList => ok_or(agents.list()),
+        Request::ApprovalList => {
+            Response::ok(shared.broker.as_ref().map(|b| b.list()).unwrap_or_default())
+        }
+        Request::ApprovalDecide { id, allow } => match &shared.broker {
+            None => Response::err(ErrorCode::State, "live approvals are not enabled"),
+            Some(b) => match b.decide(&id, allow) {
+                Some(info) => Response::ok(info),
+                None => Response::err(
+                    ErrorCode::NotFound,
+                    format!("approval `{id}` is not waiting (already decided or expired)"),
+                ),
+            },
+        },
+        Request::AgentRevoke { id } => ok_or(agents.revoke(&id)),
+        other => Response::err(
+            ErrorCode::BadRequest,
+            format!("unexpected operation `{}`", other.op()),
+        ),
+    }
 }
 
 fn unit(r: Result<(), EngineError>) -> Response {
@@ -626,6 +902,7 @@ fn health(shared: &Shared) -> Health {
         running,
         recovered_interrupted_runs: shared.recovered,
         restore_failures,
+        pending_approvals: shared.broker.as_ref().map(|b| b.list().len()).unwrap_or(0),
         shutting_down: engine.is_shutting_down(),
     }
 }

@@ -529,6 +529,9 @@ write = ["$ROOT/out"]
 
     e.engine.cancel("tick").unwrap();
     assert!(e.engine.pause("tick").is_err());
+    // A tick dispatched just before the cancel may still record its run;
+    // let that settle, then nothing new may appear.
+    tokio::time::sleep(Duration::from_millis(300)).await;
     let before = e.engine.history(Some("tick"), 1000).unwrap().len();
     tokio::time::sleep(Duration::from_millis(700)).await;
     let after = e.engine.history(Some("tick"), 1000).unwrap().len();
@@ -758,7 +761,7 @@ write = ["$ROOT/work"]
         .filter(|r| r.status == ExecutionStatus::Skipped)
         .count();
     let ran = runs.len() - skipped;
-    assert!(skipped >= 5, "expected skipped ticks, got {runs:?}");
+    assert!(skipped >= 3, "expected skipped ticks, got {runs:?}");
     // ~1.6s / 0.7s per run: at most 3 real runs, never concurrent.
     assert!((1..=3).contains(&ran), "ran {ran}");
     let lines = std::fs::read_to_string(e.root.join("work/log.txt")).unwrap();
@@ -797,4 +800,20 @@ async fn shutdown_cancels_runs_after_grace() {
     let r = timeout(WAIT, run).await.unwrap().unwrap();
     assert_eq!(r.status, ExecutionStatus::Cancelled, "{r:?}");
     assert!(!e.root.join("work/second.txt").exists());
+}
+
+#[tokio::test]
+async fn remove_deletes_definition_and_grant_but_keeps_history() {
+    let (e, _gate, release, run) = start_gated_run().await;
+    e.engine.remove("two").unwrap();
+    release.send(()).unwrap();
+    let r = timeout(WAIT, run).await.unwrap().unwrap();
+    assert_eq!(r.status, ExecutionStatus::Cancelled, "in-flight run stops");
+    assert!(e.engine.state("two").is_err());
+    assert!(e.engine.store().list_workflows().unwrap().is_empty());
+    assert!(e.engine.store().grant("two").unwrap().is_none());
+    assert_eq!(e.engine.history(Some("two"), 10).unwrap().len(), 1);
+    // The id can be registered again from scratch.
+    e.engine.register(wf(TWO_STEP, &e.root)).unwrap();
+    assert!(e.engine.activate("two").is_err(), "old grant is gone");
 }

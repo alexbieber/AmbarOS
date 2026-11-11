@@ -1,0 +1,2 @@
+# Serial console as well as the screen: lets the QEMU smoke test log in.
+kargs = ["console=tty0", "console=ttyS0,115200n8"]

@@ -1,0 +1,73 @@
+name: OS image
+
+# Builds the Ambar OS bootable container, lints it, builds a qcow2 disk with
+# bootc-image-builder and boots it in QEMU/KVM with the serial smoke test.
+# Pushes the image to GHCR on main.
+
+on:
+  push:
+    branches: [main]
+    paths: ["os/**", "crates/**", "desktop/**", "sdk/**", "marketplace/**", "Cargo.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write   # keyless image signing (sigstore)
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/ambar-os
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /opt/hostedtoolcache /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+      - uses: actions/checkout@v4
+
+      - name: Build container image
+        run: sudo podman build --pull=newer -t localhost/ambar-os:latest -f os/Containerfile .
+
+      - name: Build qcow2 disk
+        run: PODMAN="sudo podman" os/build.sh qcow2 || { echo "disk build failed"; exit 1; }
+
+      - name: Install QEMU and enable KVM
+        run: |
+          sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo chown -R "$USER" output
+
+      - name: Boot and smoke-test (CLI, service, marketplace, Plasma, KRunner, Welcome)
+        run: SERIAL_LOG=output/serial.log SCREENSHOT=output/desktop.png os/test-qemu.sh output/qcow2/disk.qcow2
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-evidence
+          path: |
+            output/serial.log
+            output/desktop.png
+
+      - name: Push to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman tag localhost/ambar-os:latest "$IMAGE:latest"
+          sudo podman tag localhost/ambar-os:latest "$IMAGE:${{ github.sha }}"
+          sudo podman push --digestfile digest "$IMAGE:latest"
+          sudo podman push "$IMAGE:${{ github.sha }}"
+          echo "DIGEST=$(cat digest)" >> "$GITHUB_ENV"
+
+      - uses: sigstore/cosign-installer@v3
+        if: github.ref == 'refs/heads/main'
+
+      - name: Sign image (keyless, sigstore)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cosign sign --yes "$IMAGE@$DIGEST"

@@ -1,0 +1,79 @@
+# Ambar OS — bootable container image (bootc), Fedora KDE atomic base.
+#
+#   podman build -t localhost/ambar-os:latest -f os/Containerfile .
+#   os/build.sh qcow2      # disk image via bootc-image-builder
+#   os/test-qemu.sh        # boot it and run the smoke test
+#
+# Everything Ambar adds lives in /usr (immutable, updated atomically with the
+# image) or /etc (defaults the user can override). Nothing is written to /var.
+
+ARG FEDORA_VERSION=45
+ARG BASE_IMAGE=quay.io/fedora-ostree-desktops/kinoite:${FEDORA_VERSION}
+
+# ---------------------------------------------------------------- build stage
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS build
+RUN dnf -y install --setopt=install_weak_deps=False \
+        cargo rust gcc gcc-c++ make cmake perl-FindBin perl-IPC-Cmd \
+        python3 python3-pip python3-setuptools \
+    && dnf clean all
+WORKDIR /src
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+COPY docs ./docs
+# Use the distribution's Rust instead of rustup's toolchain file.
+RUN rm rust-toolchain.toml && cargo build --release --locked --bin ambar --bin ambard
+COPY sdk ./sdk
+COPY desktop ./desktop
+# Python parts, installed into a staging root with /usr prefix. The final
+# image provides PySide6 from Fedora (python3-pyside6), so no deps here.
+RUN pip install --no-deps --no-build-isolation --root /out --prefix /usr \
+        ./sdk/python ./desktop/automation-center \
+    && install -Dm755 target/release/ambar  /out/usr/bin/ambar \
+    && install -Dm755 target/release/ambard /out/usr/bin/ambard
+
+# ---------------------------------------------------------------- OS image
+FROM ${BASE_IMAGE}
+ARG FEDORA_VERSION
+
+LABEL org.opencontainers.image.title="Ambar OS" \
+      org.opencontainers.image.description="Designed for Humans. Built for AI. Open to Everyone." \
+      org.opencontainers.image.source="https://github.com/alexbieber/AmbarOS" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      containers.bootc=1
+
+# Runtime dependencies of the Automation Center.
+RUN dnf -y install --setopt=install_weak_deps=False python3-pyside6 python3-jeepney && dnf clean all
+
+# Ambar software.
+COPY --from=build /out/usr /usr
+
+# Desktop: colour schemes, look-and-feel, wallpaper, icons, launcher.
+COPY desktop/plasma/color-schemes/ /usr/share/color-schemes/
+COPY desktop/plasma/look-and-feel/ /usr/share/plasma/look-and-feel/
+COPY desktop/plasma/wallpapers/Ambar/ /usr/share/wallpapers/Ambar/
+COPY desktop/share/icons/ /usr/share/icons/
+COPY desktop/share/applications/ /usr/share/applications/
+# KRunner (Alt+Space) integration and first-login Welcome.
+COPY desktop/share/krunner/ /usr/share/krunner/
+COPY desktop/share/dbus-1/ /usr/share/dbus-1/
+COPY desktop/share/autostart/ /etc/xdg/autostart/
+
+# Marketplace shipped with the OS (publishers still need to be trusted explicitly).
+COPY marketplace/index.json /usr/share/ambar/marketplace/index.json
+COPY marketplace/packages/ /usr/share/ambar/marketplace/packages/
+COPY marketplace/ambar-examples.pub /usr/share/ambar/marketplace/ambar-examples.pub
+
+# System defaults: user service, Plasma look, login screen, serial console.
+COPY os/files/ /
+
+# Branding (ID stays "fedora" so Fedora tooling keeps working).
+COPY os/branding.sh /tmp/branding.sh
+RUN /tmp/branding.sh "$(realpath /usr/lib/os-release)" "${FEDORA_VERSION}" && rm /tmp/branding.sh
+
+# Enable ambard for every user session (systemd user preset), and sanity-check.
+RUN systemctl --global preset ambard.service \
+    && test -x /usr/bin/ambard && /usr/bin/ambar --version \
+    && test -x /usr/bin/ambar-krunner && test -x /usr/bin/ambar-center \
+    && python3 -c "import ambar_center, ambar_center.krunner, ambar_sdk, jeepney, PySide6"
+
+RUN bootc container lint

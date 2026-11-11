@@ -1,5 +1,8 @@
 //! `ambar` — command-line front end for the Ambar automation engine.
 
+mod agent_cmds;
+mod ai_cmds;
+mod pkg_cmds;
 mod service_cmds;
 
 use std::io::{self, BufRead, IsTerminal, Write};
@@ -85,6 +88,18 @@ enum Command {
     /// Manage workflows in the running ambard service.
     #[command(subcommand)]
     Workflow(service_cmds::WorkflowCmd),
+    /// Build automations from plain-language descriptions.
+    #[command(subcommand)]
+    Ai(ai_cmds::AiCmd),
+    /// Manage agent identities and review their proposals.
+    #[command(subcommand)]
+    Agent(agent_cmds::AgentCmd),
+    /// Allow or deny sensitive actions that are waiting for you.
+    #[command(subcommand)]
+    Approval(agent_cmds::ApprovalCmd),
+    /// Build, sign, share and install workflow packages.
+    #[command(subcommand)]
+    Pkg(pkg_cmds::PkgCmd),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -369,6 +384,22 @@ async fn main() -> Result<()> {
         }
         Command::Workflow(cmd) => {
             let code = service_cmds::workflow(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Pkg(cmd) => {
+            let code = pkg_cmds::pkg(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Approval(cmd) => {
+            let code = agent_cmds::approval(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Agent(cmd) => {
+            let code = agent_cmds::agent(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
+            std::process::exit(code);
+        }
+        Command::Ai(cmd) => {
+            let code = ai_cmds::ai(cmd, &ServicePaths::new(data_dir(&cli)?)).await?;
             std::process::exit(code);
         }
         Command::Revoke { workflow } => {

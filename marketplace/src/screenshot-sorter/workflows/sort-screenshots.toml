@@ -1,0 +1,18 @@
+id = "sort-screenshots"
+name = "Sort screenshots"
+
+[trigger]
+type = "folder_watch"
+path = "~/Desktop"
+pattern = "Screenshot*"
+
+[[conditions]]
+type = "file_extension"
+any_of = ["png", "jpg"]
+
+[[actions]]
+type = "move_file"
+to_dir = "~/Pictures/Screenshots/{date}"
+
+[permissions]
+write = ["~/Desktop", "~/Pictures/Screenshots"]

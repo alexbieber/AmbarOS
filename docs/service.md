@@ -100,7 +100,14 @@ Workflow states are not changed by a stop, so they come back on the next start.
 
 **Consent:** a grant is only sent when the user approved it at the CLI prompt or passed `--yes`. The service can't tell whether a human did that; see "Known limitations".
 
-**Sensitive actions:** trash and overwrite are refused in the background (`DenyAll`) unless the workflow was added with `--allow-sensitive`.
+**Sensitive actions (live approvals):** when a background run reaches a sensitive action (trash, overwrite) that the grant doesn't pre-approve, the run **waits**:
+- The request appears at the top of the Automation Center's Overview and in `ambar approval list`, with a desktop notification.
+- You allow or deny it there, or with `ambar approval allow|deny <id>`.
+- No answer within `--approval-timeout` (default 300 s) means **deny**.
+- Agents can't see or decide approvals.
+- At shutdown, waiting requests are denied, so runs finish promptly.
+- Every request and outcome is audited as `approval.requested`, `.allowed`, `.denied` or `.expired`.
+- `--approval-timeout 0` turns this off: sensitive actions then need `--allow-sensitive` up front.
 
 ## Unit files
 
@@ -121,7 +128,6 @@ CI checks both files: `systemd-analyze verify` on Linux, where any warning fails
 ## Known limitations
 
 - **Untested service managers:** `service install` / `uninstall` (`launchctl bootstrap`, `systemctl --user enable`) haven't been run on a real Mac or a Linux desktop with a user session. The unit files are validated, but loading them isn't. Without `install`, ambard runs only until logout or reboot.
-- **No in-service approvals:** a sensitive action can't ask you at run time. It needs `--allow-sensitive` up front. A desktop approval prompt over IPC is planned with the Automation Center.
 - **Consent is by convention:** any process running as you can connect and grant permissions. That's the standard Unix trust boundary, but it means an AI agent running as you could too. Per-client identities and scoped tokens belong to the agent runtime phase and must exist before agents get socket access.
 - **No systemd watchdog yet:** health is available on demand (`service status`), but there's no push heartbeat.
 - **Unix only:** Linux and macOS. No Windows support.
