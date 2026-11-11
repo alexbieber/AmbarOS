@@ -1,0 +1,12 @@
+---
+description: Python and QML apps - Automation Center, Welcome, KRunner plugin, Python SDK.
+globs: desktop/automation-center/**, sdk/python/**
+alwaysApply: false
+---
+
+# Python / QML
+
+- Automation Center: PySide6 + QML in `desktop/automation-center/ambar_center/`. Tests run offscreen against a real `ambard`: `QT_QPA_PLATFORM=offscreen python3 -m pytest desktop/automation-center/tests` (build `ambard` first with `cargo build`).
+- Pass user text to the CLI after `--` so it can never be parsed as a flag (tested).
+- Python 3.11+, type hints, standard library first. No new runtime dependencies in `ambar_sdk`.
+- Light and dark themes must both meet WCAG AA contrast for text.

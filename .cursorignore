@@ -1,0 +1,10 @@
+# Keep Cursor's index fast: build output and disk images aren't source.
+target/
+output/
+site/
+*.iso
+*.qcow2
+*.img
+*.squashfs
+docs/media/*.mp4
+docs/media/*.gif

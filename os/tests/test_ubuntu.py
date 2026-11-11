@@ -45,7 +45,7 @@ def test_scripts_parse():
         subprocess.run(["bash", "-n", str(s)], check=True)
         assert s.stat().st_mode & 0o111, f"{s.name} must be executable"
     if shutil.which("shellcheck"):
-        r = subprocess.run(["shellcheck", "-S", "error", *map(str, scripts)], capture_output=True, text=True)
+        r = subprocess.run(["shellcheck", "-S", "warning", "-e", "SC2054", *map(str, scripts)], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout
 
 

@@ -1,0 +1,15 @@
+---
+description: Rust workspace - automation engine, ambard service, ambar CLI, AI builder, signed packages.
+globs: crates/**, Cargo.toml, Cargo.lock
+alwaysApply: false
+---
+
+# Rust crates
+
+- `ambar-automation` (engine: triggers, conditions, the closed action set, permissions), `ambar-service` (`ambard`: IPC with owner token, approvals, agents, audit log, systemd/launchd), `ambar-cli` (`ambar`), `ambar-ai` (draft automations from text via Anthropic/OpenAI/Ollama), `ambar-pkg` (signed packages).
+- The action set is closed by design. Never add an action that runs a program, a shell command or arbitrary code, and never let AI output or a package widen it.
+- Paths are confined to granted folders (symlink and `..` escapes are tested). Destructive actions (trash, overwrite) need approval.
+- Agents must never reach owner-only operations; revocation must cut live connections.
+- `cargo fmt`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, no new `unsafe`, MSRV 1.89, `--locked` everywhere.
+- Security fixes come with a test that fails when the protection is removed (see the sabotage table in `docs/STATUS.md`).
+- AI tests use mock servers; never require a real API key.

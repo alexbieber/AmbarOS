@@ -9,9 +9,12 @@ grep -q '^branding: ambar' "$S"
 M=/etc/calamares/modules
 # Partition and OEM names, links.
 sed -i 's/"kubuntu_boot"/"ambar_boot"/; s/"kubuntu_2604"/"ambar_root"/' "$M/partition.conf"
+# shellcheck disable=SC2016  # ${DATE} is expanded by Calamares, not here
 sed -i -E 's/^batch-identifier:.*/batch-identifier: ambar-${DATE}/' "$M/oemid.conf"
 sed -i -E 's/^showDonateUrl:.*/showDonateUrl: false/' "$M/welcome.conf"
-! grep -rq "kubuntu_2604\|kubuntu_boot" "$M/partition.conf"
+if grep -rq "kubuntu_2604\|kubuntu_boot" "$M/partition.conf"; then
+  echo "partition.conf still has Kubuntu labels" >&2; exit 1
+fi
 
 # sudo resets the environment, so the installer would lose the desktop's
 # display (Wayland or X) and fail to open. Pass exactly what it needs.

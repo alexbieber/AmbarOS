@@ -43,6 +43,7 @@ markdown_extensions:
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.details
+  - pymdownx.tabbed: { alternate_style: true }
 
 validation:
   links:
@@ -73,3 +74,4 @@ nav:
   - Project:
       - Status: STATUS.md
       - Community: community.md
+      - Publish on GitHub: github-setup.md

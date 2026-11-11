@@ -1,0 +1,13 @@
+---
+description: Writing docs, README, STATUS and release notes for Ambar OS.
+globs: docs/**, README.md, mkdocs.yml, FEATURES.md, CONTRIBUTING.md
+alwaysApply: false
+---
+
+# Docs
+
+- `mkdocs build --strict` must pass; every page must be in the `nav` of `mkdocs.yml` (tested).
+- Commands and flags shown in docs must exist in the real CLI (tested by `tests/test_docs.py`).
+- `docs/STATUS.md` is the source of truth for what is proven. README and FEATURES must not claim more than it does.
+- Plain language, short sentences, no hype. Say what was tested and how.
+- Screenshots go in `docs/images/`, videos in `docs/media/` (keep files well under 10 MB).

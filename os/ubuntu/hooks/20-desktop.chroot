@@ -124,7 +124,7 @@ install -d /usr/share/kubuntu-default-settings/kf5-settings
 cp /etc/xdg/kcm-about-distrorc /usr/share/kubuntu-default-settings/kf5-settings/kcm-about-distrorc
 
 # --- Discover is the Ambar Store
-for f in /usr/share/applications/org.kde.discover.desktop; do
+for f in /usr/share/applications/org.kde.discover*.desktop; do
   [ -f "$f" ] && sed -i -E 's/^Name=.*/Name=Ambar Store/; s/^GenericName=.*/GenericName=App Store/' "$f"
 done
 

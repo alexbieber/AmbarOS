@@ -13,6 +13,9 @@ These come from the project plan, and reviews hold every change to them:
 
 ## Set up
 
+Using an AI editor (Cursor, Claude Code)? It picks up [`AGENTS.md`](AGENTS.md) and `.cursor/rules/` automatically. People should read `AGENTS.md` too: it's the quickest map of the repo.
+
+
 You need Linux or macOS, Rust 1.89+ and Python 3.11+.
 
 ```sh
@@ -28,7 +31,9 @@ bash scripts/verify.sh      # everything CI checks, plus a live ambard smoke tes
 | AI builder | `crates/ambar-ai` | `cargo test -p ambar-ai` (mock servers, no API key needed) |
 | Packages | `crates/ambar-pkg` | `cargo test -p ambar-pkg` |
 | Automation Center, KRunner, installer, theme | `desktop/`, `os/live/installer` | `QT_QPA_PLATFORM=offscreen python3 -m pytest desktop os/tests` |
-| OS image | `os/` | `python3 -m pytest os/tests`; real build and boot: `os/build.sh qcow2 && os/test-qemu.sh` |
+| Ambar OS ISO (Ubuntu edition) | `os/ubuntu/` | `python3 -m pytest os/tests`; real build and boot: `sudo os/ubuntu/build.sh all && os/ubuntu/test-qemu.sh output/ubuntu/ambar-os-0.2-amd64.iso` |
+| macOS-style shell | `desktop/plasma/` | `python3 -m pytest desktop/plasma/tests os/tests/test_ubuntu.py` |
+| Atomic edition (experimental) | `os/` | `python3 -m pytest os/tests`; `os/build.sh qcow2 && os/test-qemu.sh` |
 | Docs site | `docs/`, `mkdocs.yml` | `mkdocs build --strict` |
 
 ## Making a change

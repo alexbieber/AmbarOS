@@ -17,7 +17,8 @@
   <a href="docs/install.md">Install</a> ·
   <a href="docs/first-steps.md">First steps</a> ·
   <a href="docs/hardware.md">Hardware</a> ·
-  <a href="docs/STATUS.md">Status</a>
+  <a href="docs/STATUS.md">Status</a> ·
+  <a href="FEATURES.md">Features</a>
 </p>
 
 ---
@@ -38,7 +39,8 @@ It installs **any app**: the Ambar Store, `.deb` downloads, Flatpak, Snap, AppIm
 Under the hood it's **Ubuntu 26.04 LTS** with **KDE Plasma 6**, so it gets five years of security updates and Ubuntu's hardware support. On top of that, Ambar adds an **automation layer**: background automations, and an AI assistant that drafts new ones. Nothing runs without your OK.
 
 <p align="center">
-  <img src="docs/images/os/desktop.jpg" alt="The Ambar OS desktop: menu bar, Dock, wallpaper" width="100%">
+  <a href="docs/media/ambar-os-tour.mp4"><img src="docs/media/ambar-os-tour.gif" alt="Ambar OS tour: desktop, Ambar menu, Control Center, Launchpad, apps, Store, install" width="100%"></a><br>
+  <sub>▶ <a href="docs/media/ambar-os-tour.mp4"><b>Watch the 50-second tour (MP4)</b></a>. Every frame is a screenshot of the real system. · <a href="FEATURES.md"><b>Full feature list</b></a></sub>
 </p>
 
 <table>
@@ -254,6 +256,10 @@ Details: [Architecture](docs/architecture.md) · [Security policy](SECURITY.md) 
 [Full status →](docs/STATUS.md)
 
 ## Development
+
+- **Features, with what's proven:** [FEATURES.md](FEATURES.md) · **Tour video:** [ambar-os-tour.mp4](docs/media/ambar-os-tour.mp4)
+- **Working with an AI editor (Cursor, Claude Code):** it reads [AGENTS.md](AGENTS.md) and `.cursor/rules/` automatically.
+- **Putting it on GitHub and publishing the ISO:** [Publish on GitHub](docs/github-setup.md)
 
 ```sh
 bash scripts/verify.sh            # everything CI checks, plus a live ambard smoke test

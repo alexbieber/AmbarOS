@@ -1,0 +1,18 @@
+---
+description: Building the Ambar OS ISO (Ubuntu edition) - build script, packages, chroot hooks, overlay, GRUB, Calamares installer, QEMU tests.
+globs: os/ubuntu/**, os/tests/**, os/smoke_test.py, .github/workflows/os-ubuntu.yml
+alwaysApply: false
+---
+
+# Ambar OS image (os/ubuntu)
+
+Pipeline: `build.sh rootfs` (debootstrap + `packages.txt`, reused while `$WORK/.debootstrap-done` exists) → `build.sh ambar` (Ambar binaries, desktop shell, `overlay/`, then `hooks/*.chroot` in name order) → `build.sh iso` (cleanup, squashfs, GRUB UEFI+BIOS, xorriso).
+
+- Add packages to `packages.txt`; keep unwanted ones out with `exclude.txt` (pinned to -1). Don't add `firefox`/`thunderbird`: they're snap stubs on 26.04.
+- Files that go into the image verbatim belong in `overlay/` (same path as on the target). Logic belongs in a hook.
+- Hooks run inside the chroot as root with `set -euo pipefail`. They must be **idempotent** (they run again on every `build.sh ambar`). Use `dpkg-divert --truename` to read originals you've replaced.
+- sudo is sudo-rs: no `sudo -E`; pass env with `sudo /usr/bin/env VAR=...`.
+- Calamares: Ambar overrides Kubuntu modules in `overlay/etc/calamares/modules/` (`before_bootloader_context`, `shellprocess_rmcdrom`, `automirror`, `packages`). Each one fixed a real failed install. Keep them, and test any new override in `os/tests/test_ubuntu.py`.
+- Every change to the recipe gets a static test in `os/tests/test_ubuntu.py` (these run in seconds without building).
+- A real check is `os/ubuntu/test-qemu.sh <iso>`; with `TARGET_DISK=disk.qcow2` it attaches a disk to install onto, and `test-qemu.sh disk` boots that installed disk. Under emulation use the default CPU and `GPU=VGA`.
+- After changing the recipe, record what you actually booted in `docs/STATUS.md`.

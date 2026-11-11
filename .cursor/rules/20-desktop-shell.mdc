@@ -1,0 +1,15 @@
+---
+description: The macOS-style Plasma shell - layout, defaults, Aurorae window decorations, Plasma 6 widgets (Ambar menu, app name, Control Center) and its backend.
+globs: desktop/plasma/**, desktop/share/**, os/ubuntu/hooks/20-desktop.chroot
+alwaysApply: false
+---
+
+# macOS-style shell (desktop/plasma)
+
+- `generate.py` writes the look-and-feel packages: the layout script (top menu bar + floating Dock) and defaults (fonts, icons, decorations). Edit the generator, not its output, then run it. The tests fail if the generated colour schemes or decorations are out of date.
+- `aurorae.py` generates `aurorae/Ambar` and `aurorae/AmbarDark` (traffic-light buttons, square 9-slice corners). Theme IDs: `__aurorae__svg__Ambar`, `__aurorae__svg__AmbarDark`.
+- Widgets are Plasma 6: `metadata.json` + `contents/ui/main.qml` using `PlasmoidItem`. Never declare QML properties that clash with the base type (`icon`, `state`, ...): it's a load error ("Cannot override FINAL property"). The tests check for this.
+- System actions in widgets go through Plasma APIs (`SessionManagement`, `TaskManager`) or the `ambar-control-center` helper, never ad-hoc shell strings built from user input.
+- `control-center/ambar-control-center` is the backend (`status` → JSON, `set <key> <value>`). Each key maps to one system tool (nmcli, bluetoothctl, rfkill, wpctl, org.kde.ScreenBrightness, kwriteconfig6). Add a test in `tests/test_control_center.py` with stand-in tools for every new key.
+- Dark mode has to switch colours, Plasma theme, icons **and** window decorations; `plasma-apply-lookandfeel` alone only changes colours.
+- Keep the Welcome from opening in the live USB session (`boot=casper`): it would cover the installer.

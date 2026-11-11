@@ -2,6 +2,7 @@
 # OS identity: "Ambar OS", based on Ubuntu (ID_LIKE keeps Ubuntu tooling working).
 set -euo pipefail
 # Read Ubuntu's originals (the diverted copies on a re-run) so this is idempotent.
+# shellcheck source=/dev/null
 . "$(dpkg-divert --truename /usr/lib/os-release)"
 dpkg-divert --quiet --local --rename --add /usr/lib/os-release
 cat > /usr/lib/os-release <<OS
@@ -22,6 +23,7 @@ OS
 ln -sf ../usr/lib/os-release /etc/os-release
 # lsb_release: keep DISTRIB_ID/CODENAME as Ubuntu so PPAs and vendor .deb
 # installers that check them keep working; only the description is ours.
+# shellcheck source=/dev/null
 . "$(dpkg-divert --truename /etc/lsb-release)"
 dpkg-divert --quiet --local --rename --add /etc/lsb-release
 cat > /etc/lsb-release <<LSB

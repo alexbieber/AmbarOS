@@ -1,0 +1,18 @@
+---
+description: Ambar OS project overview and ground rules. Applies to every change.
+alwaysApply: true
+---
+
+# Ambar OS
+
+A full desktop OS: Ubuntu 26.04 LTS + KDE Plasma 6, designed like macOS, with an automation layer (Rust `ambard`) on top. Read `AGENTS.md` at the repo root for the map, commands and gotchas.
+
+Ground rules, enforced in review:
+
+1. Never claim a feature works unless a test or real run shows it. Keep `docs/STATUS.md` honest (✅ run, ⚠ not run).
+2. No arbitrary execution: automations, packages and AI output never run programs or shell commands. The action set is closed.
+3. Secure by default: new access needs an explicit user grant and an audit-log entry. Don't weaken signature, token or path checks.
+4. Every behaviour change gets a test; user-visible changes update `docs/`.
+5. No secrets in the repo, not even for tests.
+
+Run `bash scripts/verify.sh` before saying a change is done. Never commit `target/`, `output/` or `site/`.
