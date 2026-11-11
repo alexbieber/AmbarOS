@@ -23,7 +23,7 @@ The bootable OS images are **written but have never been built or booted**:
 User documentation is a site built from `docs/`. There's a hardware report tool and contribution guides. That needs a machine with Fedora registry access and KVM: the `os-image` CI job, which runs on GitHub as soon as the repo is pushed, or a Linux PC.
 
 **What is proven and what isn't:**
-- **Proven:** the software, by 185 automated tests and ~30,000 property-test cases.
+- **Proven:** the software, by 186 automated tests and ~30,000 property-test cases.
 - **Not proven:** that the OS boots on any machine. The CI boot test is written to prove it: login, service, marketplace, a real workflow run, Plasma, Welcome and KRunner, plus a desktop screenshot.
 
 | Phase | What | Status |
@@ -49,8 +49,8 @@ User documentation is a site built from `docs/`. There's a hardware report tool 
 | Plasma theme, desktop entries, KRunner/autostart registration, brand logo assets | 10 |
 | OS recipe: COPY sources, configs, systemd unit, shellcheck, branding, boot smoke harness (pass and fail) | 8 |
 | Live USB, installer, ARM64/Pi, hardware report | 16 |
-| Docs: strict site build, nav completeness, documented commands/flags exist, community files | 5 |
-| **Total** | **185**, 3 consecutive full runs, all green |
+| Docs: strict site build, nav completeness, documented commands/flags exist, community files, README links and media | 6 |
+| **Total** | **186**, 3 consecutive full runs, all green |
 
 Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `cargo audit`, `shellcheck`, `desktop-file-validate`, `systemd-analyze verify`, WCAG AA contrast.
 

@@ -1,103 +1,159 @@
-<p align="center"><img src="docs/images/brand/ambar-os-logo.png" alt="Ambar OS" width="420"></p>
+<p align="center">
+  <img src="docs/images/hero.jpg" alt="Ambar OS: Designed for Humans. Built for AI. Open to Everyone." width="100%">
+</p>
 
-# Ambar OS
+<p align="center">
+  <a href="https://github.com/alexbieber/AmbarOS/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/alexbieber/AmbarOS/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/alexbieber/AmbarOS/actions/workflows/os-image.yml"><img alt="OS image" src="https://github.com/alexbieber/AmbarOS/actions/workflows/os-image.yml/badge.svg"></a>
+  <a href="https://alexbieber.github.io/AmbarOS/"><img alt="Docs" src="https://img.shields.io/badge/docs-alexbieber.github.io%2FAmbarOS-F2A43A"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-B35C05"></a>
+  <img alt="Fedora 45 · KDE Plasma 6" src="https://img.shields.io/badge/base-Fedora%2045%20%C2%B7%20KDE%20Plasma%206-3A3129">
+  <img alt="x86_64 and ARM64" src="https://img.shields.io/badge/arch-x86__64%20%C2%B7%20arm64-3A3129">
+</p>
 
-**Designed for Humans. Built for AI. Open to Everyone.**
+<p align="center">
+  <b><a href="https://alexbieber.github.io/AmbarOS/">Documentation</a></b> ·
+  <a href="docs/live-usb.md">Try it from a USB stick</a> ·
+  <a href="docs/install.md">Install</a> ·
+  <a href="docs/first-steps.md">First steps</a> ·
+  <a href="docs/hardware.md">Hardware</a> ·
+  <a href="docs/STATUS.md">Status</a>
+</p>
 
-Ambar OS is an AI-native, Linux-based operating system: the simplicity of macOS,
-the openness of Linux, and automation built in from the start. See
-[`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for the full vision and phases.
+---
 
-**Documentation:** [alexbieber.github.io/AmbarOS](https://alexbieber.github.io/AmbarOS/), built from [`docs/`](docs/index.md):
+**Ambar OS** is a Linux desktop that does the repetitive work for you. It's built on Fedora's KDE Plasma, and Ambar adds three things:
 
-- [Try it from a USB stick](docs/live-usb.md)
-- [Install](docs/install.md)
-- [First steps](docs/first-steps.md)
-- [Hardware](docs/hardware.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [FAQ](docs/faq.md)
+- **An automation service** that files, sorts, writes and tidies in the background.
+- **An app to manage your automations**, the Automation Center.
+- **An optional AI assistant** that writes new automations from a sentence.
 
-## Status
+Nothing runs without your OK.
 
-The full Ambar software stack is built and tested: automation engine, background service with live approvals, AI automation builder, agent runtime, Automation Center desktop app (with first-run Welcome), KRunner search, Plasma theme, SDK, packages and marketplace. **The bootable OS images are written but have not been built or booted yet.** These are:
+<p align="center">
+  <a href="docs/media/ambar-demo.mp4"><img src="docs/media/ambar-demo.gif" alt="Describing an automation, reviewing the AI draft and approving it" width="760"></a><br>
+  <sub>▶ <a href="docs/media/ambar-demo.mp4"><b>Watch the full 1-minute demo (MP4)</b></a>. This is a recording of the real Automation Center and service. The AI reply is replayed from a file, so it needs no API key.</sub>
+</p>
 
-- an x86_64 and ARM64 install image
-- a live USB with a built-in installer
-- a Raspberry Pi 4 image
+> [!IMPORTANT]
+> **Early project.** The Ambar software is built and covered by 186 automated tests. The bootable OS images (install image, live USB, Raspberry Pi) are written, but **have not been built or booted on real hardware yet**. [Status](docs/STATUS.md) says exactly what is and isn't proven.
 
-Building and booting them happens in CI (`os-image` workflow). Everything has been tested on Linux; macOS is untested.
+## Why Ambar
 
-185 automated tests pass, plus ~30,000 property-test cases. See [`docs/STATUS.md`](docs/STATUS.md) for exactly what is proven, what isn't, and the risks.
+<table>
+<tr>
+<td width="33%" valign="top">
 
-![Automation Center](docs/images/automation-center.png)
+### 🧡 Automations you can trust
+An automation can only use the built-in actions:
 
-| First-run Welcome | Live approval |
+- create folders
+- copy, move, write or trash files
+- send notifications
+
+Each automation is limited to the folders it declares. It can **never run a program or command**. You approve its access first, and everything it does goes into an audit log.
+
+</td>
+<td width="33%" valign="top">
+
+### ✨ AI that asks first
+Describe what you want in plain words, using Claude, any OpenAI-compatible service, or a local Ollama model. The AI writes a **draft**. Before you approve it, you see:
+
+- the automation
+- the folders it needs
+- a risk check
+
+</td>
+<td width="33%" valign="top">
+
+### ↩️ Updates you can undo
+The whole OS is one signed image. Updates install in the background and apply on restart. If one goes wrong, **pick the previous version** in the boot menu. Your files are never touched.
+
+</td>
+</tr>
+</table>
+
+## A look around
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/screens/overview-light.png" alt="Overview, light"><br><sub><b>Overview</b>: what's running, plus a box to describe a new automation</sub></td>
+<td width="50%"><img src="docs/images/screens/overview-dark.png" alt="Overview, dark"><br><sub><b>Light and dark</b>, matched to the whole Plasma desktop</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/screens/draft-review-light.png" alt="AI draft review"><br><sub><b>AI draft review</b>: the automation, the access it needs and a risk level, before anything is added</sub></td>
+<td><img src="docs/images/screens/approval-light.png" alt="Live approval"><br><sub><b>Live approval</b>: sensitive actions like trash wait for you, and are denied if you don't answer</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/screens/proposals-light.png" alt="Agent proposals"><br><sub><b>Agents propose, you decide</b>: assistants have limited scopes and can't approve anything</sub></td>
+<td><img src="docs/images/screens/automations-dark.png" alt="Automations"><br><sub><b>Automations</b>: run, pause, resume or disable, each with its last result</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/screens/welcome-dark.png" alt="First-run Welcome"><br><sub><b>First-run Welcome</b>: service, appearance, optional AI and signed starter automations</sub></td>
+<td><img src="docs/images/screens/installer.png" alt="Live USB installer"><br><sub><b>Live USB installer</b>: only offers safe disks, and you type the disk name to confirm (shown with example disks)</sub></td>
+</tr>
+</table>
+
+<sub>All screenshots are of the real software, generated by <code>scripts/demo/screenshots.py</code> against a running <code>ambard</code>.</sub>
+
+## What's inside
+
+| | |
 |---|---|
-| ![Welcome](docs/images/welcome.png) | ![Approval](docs/images/approval.png) |
+| 🧠 **Automation engine** | Triggers (manual, schedule, folder watch), conditions, a closed set of actions, history and an audit log |
+| ⚙️ **`ambard` service** | Runs as you, never as root, and is reached through a private local socket with a token. It handles live approvals and restores your automations at login |
+| ✨ **AI builder** | Claude, OpenAI-compatible or Ollama. Writes drafts with a risk review. A model that insists on running commands never gets a draft through |
+| 🤖 **Agents** | Assistants with their own identity and limited scopes (read, propose, memory, run). They're rate-limited and can be revoked instantly |
+| 📦 **Packages and marketplace** | ed25519-signed workflow bundles, an explicit publisher trust store, and a bundled marketplace |
+| 🖥️ **Desktop** | Automation Center (Qt/QML), Alt+Space search in KRunner, first-run Welcome, and the Ambar Plasma theme and logo |
+| 💿 **The OS** | Fedora 45 Kinoite + bootc, built for x86_64 and ARM64. Install image, live USB with installer, Raspberry Pi 4 image, signed multi-arch updates with rollback |
+| 🔧 **Tools** | `ambar` CLI, Python SDK, `ambar-hwreport` for hardware reports |
 
-## What's here
+```mermaid
+flowchart LR
+  subgraph You
+    AC[Automation Center] --- KR[KRunner search] --- W[Welcome]
+  end
+  AC & KR & W -- owner token --> D((ambard))
+  AG[Agents] -- scoped token --> D
+  AI[AI builder] -. draft only .-> AC
+  D --> E[Automation engine] --> A[(History + audit log)]
+  E -->|permission-checked| F[Your files and notifications]
+  subgraph OS[Ambar OS: Fedora 45 Kinoite, bootc image]
+    D
+  end
+```
 
-| Part | Where | Docs |
-|---|---|---|
-| Automation engine (workflows, triggers, permission-checked actions, history) | `crates/ambar-automation` | [architecture](docs/architecture.md), [workflow format](docs/workflow-format.md) |
-| `ambard` background service, authenticated local IPC, agents | `crates/ambar-service` | [service](docs/service.md) |
-| AI automation builder (Claude, OpenAI-compatible, Ollama) | `crates/ambar-ai`, `ambar ai` | below |
-| Signed workflow packages + marketplace | `crates/ambar-pkg`, `marketplace/` | [developer guide](docs/developer-guide.md) |
-| `ambar` CLI and `ambard` binaries | `crates/ambar-cli` | `ambar --help` |
-| Automation Center (Qt/QML desktop app) | `desktop/automation-center` | |
-| Ambar Plasma theme (colours, look-and-feel, wallpaper) | `desktop/plasma` | |
-| Python SDK (owners and agents) | `sdk/python` | [developer guide](docs/developer-guide.md) |
-| Bootable OS image (bootc, Fedora 45 Kinoite), x86_64 + ARM64 | `os/` | [OS image](docs/os-image.md) |
-| Live USB with installer, Raspberry Pi image | `os/live/`, `os/rpi-firmware.sh` | [live USB](docs/live-usb.md), [install](docs/install.md) |
-| Hardware report tool and compatibility list | `ambar-hwreport` | [hardware](docs/hardware.md) |
-| Docs site, contributing, security policy | `docs/`, `mkdocs.yml`, root `*.md` | [community](docs/community.md) |
+## Get it
+
+| | |
+|---|---|
+| **Try it without installing** | Write the live ISO to a USB stick and boot it → [guide](docs/live-usb.md) |
+| **Install** | From the live USB, the installer ISO, `bootc switch`, a VM or a Raspberry Pi → [guide](docs/install.md) |
+| **Mac with Apple silicon** | Use the ARM64 image in UTM → [guide](docs/install.md#virtual-machine) |
+| **Just the software** | On any Linux, or on macOS (untested), see [Quick start](#quick-start) |
+
+Images are built by CI on every change (the **OS image** workflow). Until the first release, download them from the latest run's artifacts.
 
 ## Quick start
 
-Requires Rust 1.89+.
+Run the Ambar software on an existing Linux machine. Requires Rust 1.89+ and Python 3.11+.
 
 ```sh
-cargo build --release
-export PATH="$PWD/target/release:$PATH"
+cargo build --release && export PATH="$PWD/target/release:$PATH"
 
-ambar validate examples/organize-downloads.toml
-
-# Background service
-ambar service start
-ambar workflow add examples/organize-downloads.toml --enable   # asks before granting access
+ambar service start                                   # the background service
+ambar workflow add examples/organize-downloads.toml --enable
 ambar workflow list
-ambar service status
 ambar history --steps
-ambar audit
-ambar service stop
 
-# Start at login, so enabled workflows survive a reboot (launchd / systemd --user)
-ambar service install
-
-# Or run one workflow in the foreground, without the service
-ambar run examples/daily-log.toml --once
-
-# Describe an automation in plain words (needs a model: Claude, OpenAI-compatible, or local Ollama)
-ambar ai config --provider anthropic        # key from $ANTHROPIC_API_KEY or `ambar ai set-key`
+ambar ai config --provider ollama                     # or anthropic / openai
 ambar ai create "when a PDF lands in Downloads, move it to Documents/PDFs and tell me"
 
-# Give an assistant limited access
-ambar agent create planner --scope read --scope propose
-ambar agent proposals
-
-# Packages
-ambar pkg search notes --index marketplace/index.json
-
-# Desktop app and theme
 pip install ./sdk/python ./desktop/automation-center && ambar-center
-desktop/install.sh                          # Plasma: Ambar look, wallpaper, launcher
-
-# The OS image (Linux with rootful podman)
-os/build.sh qcow2 && os/test-qemu.sh
-os/build.sh live-iso                        # live USB: try without installing, install from it
 ```
 
-A workflow looks like this:
+An automation is a short TOML file:
 
 ```toml
 id = "organize-downloads"
@@ -124,35 +180,49 @@ write = ["~/Downloads", "~/Documents/Ambar Inbox"]
 notify = true
 ```
 
-Full reference: [`docs/workflow-format.md`](docs/workflow-format.md).
+More: [First steps](docs/first-steps.md) · [Workflow format](docs/workflow-format.md) · [Developer guide](docs/developer-guide.md) · [Service](docs/service.md)
 
-## Security model (short version)
+## Security model
 
-- Workflows **cannot run programs or shell commands**. The action set is closed.
-- Nothing runs until the user **grants** the workflow's declared permissions.
-- Every path is **resolved and re-checked at run time**, so symlinks or `..` can't escape the grant.
-- **Trash and overwrite need explicit approval**. Trash is recoverable; nothing is unlinked.
-- Grants are **re-read on every run**, so revoking one takes effect immediately.
-- Every grant, state change and denial is written to an **audit log**.
+- **No execution.** Workflows, packages and AI output can't run programs or shell commands. The action set is closed.
+- **Grants first.** Nothing runs until you approve the workflow's declared access. Grants are re-read on every run, so revoking one works immediately.
+- **Paths re-checked.** Every path is resolved and checked at run time, so symlinks and `..` can't escape a grant.
+- **Sensitive means asked.** Trash and overwrite need your approval. Trash can be undone; nothing is permanently deleted.
+- **Everything audited.** Every grant, change and refusal is logged.
+- **Scoped agents.** An agent with every scope still can't grant, enable or approve anything.
 
-Details: [`docs/architecture.md`](docs/architecture.md).
+Details: [Architecture](docs/architecture.md) · [Security policy](SECURITY.md) · [Known gaps](docs/STATUS.md#known-gaps-by-design-or-deferred)
+
+## Project status
+
+| | |
+|---|---|
+| ✅ Built and tested | Engine, service, approvals, AI builder (against mock APIs), agents, packages, SDK, Automation Center, KRunner, theme, installer safety rules, hardware report, docs |
+| ⚠️ Written, not yet run | Bootable images (x86_64, ARM64, live USB, Raspberry Pi), CI build-and-boot jobs |
+| ❌ Not yet done | Real hardware testing, a real LLM in the loop, macOS run, SELinux policy, Plymouth/installer branding |
+
+**186 automated tests** pass, plus about 30,000 property-test cases. [Full status →](docs/STATUS.md)
 
 ## Development
 
 ```sh
-bash scripts/verify.sh            # everything below plus a live ambard smoke test
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-python3 -m pytest sdk/python/tests desktop os/tests tests   # needs PySide6-Essentials, pytest, pyyaml
+bash scripts/verify.sh            # everything CI checks, plus a live ambard smoke test
 ```
 
-CI: `.github/workflows/ci.yml` runs Rust on Linux and macOS, the MSRV check, `cargo audit`, the Python and desktop tests (uploading screenshots), and the unit-file checks. `.github/workflows/os-image.yml` builds and boots the OS image.
+| Area | Path |
+|---|---|
+| Rust crates | `crates/` (`ambar-automation`, `ambar-service`, `ambar-ai`, `ambar-pkg`, `ambar-cli`) |
+| Desktop | `desktop/` (Automation Center, KRunner, Plasma theme, brand) |
+| OS image | `os/` (Containerfile, live USB, Raspberry Pi, QEMU smoke test) |
+| Docs site | `docs/` + `mkdocs.yml` |
+| Demo video and screenshots | `scripts/demo/` (`record_demo.py`, `screenshots.py`, `hero.py`) |
+
+CI: [`ci.yml`](.github/workflows/ci.yml) covers Rust on Linux and macOS, the MSRV check, `cargo audit`, and the Python, desktop, OS-recipe and docs tests. [`os-image.yml`](.github/workflows/os-image.yml) builds and boots the images on x86_64 and ARM64. [`docs.yml`](.github/workflows/docs.yml) publishes the site.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and the [security policy](SECURITY.md). If you only have five minutes, [send a hardware report](docs/hardware.md#report-your-computer).
+Hardware reports, docs fixes and bug reports are as welcome as code. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). If you have five minutes, boot the live USB, run `ambar-hwreport`, and [send a hardware report](docs/hardware.md#report-your-computer).
 
 ## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE). Ambar OS is built on Fedora and is not affiliated with or endorsed by the Fedora Project. The full vision is in the [master plan](docs/MASTER_PLAN.md).

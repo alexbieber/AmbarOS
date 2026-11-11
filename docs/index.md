@@ -9,6 +9,14 @@ Ambar OS is a Linux operating system for people who want their computer to take 
 !!! warning "Early project"
     The Ambar software is built and tested, but **the OS has not yet been booted on real hardware**. Read [Status](STATUS.md) before you rely on it.
 
+## See it in action
+
+<video controls preload="metadata" poster="media/ambar-demo-poster.jpg" style="width:100%;border-radius:12px">
+  <source src="media/ambar-demo.mp4" type="video/mp4">
+</video>
+
+<small>A one-minute recording of the real Automation Center and `ambard`. The AI reply is replayed from a file, so the demo needs no API key.</small>
+
 ## Start here
 
 | I want to… | Go to |

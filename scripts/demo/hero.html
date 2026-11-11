@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Ambar OS hero</title>
+<style>
+  :root { --amber:#F2A43A; --ink:#F7F4EF; --muted:#A89F95; --bg1:#1A1612; --bg2:#07080C; }
+  * { box-sizing:border-box; margin:0; }
+  body { width:1600px; height:760px; overflow:hidden; font-family:"Inter","Inter Display",sans-serif;
+         background: radial-gradient(900px 520px at 78% 45%, rgba(252,161,1,.16), transparent 70%),
+                     radial-gradient(700px 500px at 8% 100%, rgba(245,122,12,.10), transparent 70%),
+                     linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--ink); position:relative; }
+  .grid { position:absolute; inset:0; opacity:.07;
+          background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);
+          background-size:48px 48px; mask-image:radial-gradient(800px 500px at 30% 50%,#000,transparent 75%); }
+  .copy { position:absolute; left:96px; top:128px; width:640px; }
+  .mark { width:118px; height:auto; display:block; margin-bottom:30px; filter:drop-shadow(0 10px 30px rgba(252,161,1,.35)); }
+  h1 { font-family:"Inter Display","Inter"; font-size:84px; line-height:1; font-weight:700; letter-spacing:-2px; }
+  h1 span { color:var(--amber); }
+  .tag { margin-top:18px; font-size:21px; color:var(--amber); font-weight:500; }
+  .sub { margin-top:22px; font-size:19px; line-height:1.5; color:var(--muted); max-width:500px; }
+  .chips { margin-top:34px; display:flex; gap:10px; flex-wrap:wrap; }
+  .chip { font-size:13px; font-weight:600; padding:8px 12px; border-radius:999px; color:#EADFD2;
+          background:rgba(255,255,255,.05); border:1px solid rgba(242,164,58,.35); }
+  .shot { position:absolute; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,.10);
+          box-shadow:0 40px 90px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.4); }
+  .shot img { display:block; width:100%; }
+  .back  { left:720px; top:70px;  width:860px; transform:perspective(1800px) rotateY(-7deg); opacity:.95; }
+  .front { left:985px; top:300px; width:570px; transform:perspective(1800px) rotateY(-7deg); }
+  .bar { height:30px; background:#221D18; display:flex; align-items:center; gap:7px; padding-left:12px; }
+  .bar i { width:11px; height:11px; border-radius:50%; background:#3A3129; display:block; }
+  .bar i:first-child { background:#F2A43A; }
+</style></head>
+<body>
+  <div class="grid"></div>
+  <div class="copy">
+    <img class="mark" src="../../desktop/brand/ambar-mark.svg" alt="">
+    <h1>Ambar <span>OS</span></h1>
+    <div class="tag">Designed for Humans. Built for AI. Open to Everyone.</div>
+    <div class="sub">A Linux desktop that does the repetitive work for you. Automations run in the background, AI drafts new ones, and nothing runs without your OK.</div>
+    <div class="chips"><span class="chip">Fedora 45 · KDE Plasma 6</span><span class="chip">Updates you can undo</span><span class="chip">AI that asks first</span><span class="chip">Open source</span></div>
+  </div>
+  <div class="shot back"><div class="bar"><i></i><i></i><i></i></div><img src="../../docs/images/screens/overview-dark.png" alt=""></div>
+  <div class="shot front"><div class="bar"><i></i><i></i><i></i></div><img src="../../docs/images/screens/approval-light.png" alt=""></div>
+</body></html>
