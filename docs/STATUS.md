@@ -56,6 +56,12 @@ _Last updated: 2026-11-11_
   - nmap host addresses were lost
 - ⚠ Not yet seen in a booted ISO; the build recipe installs them and the boot test checks they're there.
 
+**OWASP additions** (Workbench checklist, practice labs, Dependency-Check):
+
+- ✅ The OWASP WSTG checklist (109 tests, 12 areas, IDs and names from the official checklist) is tested end to end: marking tests, notes, findings linked to a test, coverage in the report, and the Workbench page writing the same file.
+- ✅ `ambar-lab` and `ambar-depcheck` are tested with a stand-in Podman: labs publish on 127.0.0.1 only, start/stop/status work, only the listed labs can be started, and the project is mounted read-only.
+- ⚠ The container images (Juice Shop, WebGoat, Dependency-Check) weren't downloaded or run here: this workspace has no access to a container registry.
+
 **One design for every Ambar app** (`desktop/share/python/ambar_ui.py`):
 
 - The five tools use the Automation Center's colours, sidebar, page titles, cards, badges and Inter font, in light and dark.

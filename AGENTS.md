@@ -20,7 +20,7 @@ Instructions for AI coding agents (Cursor, Claude Code, Copilot and others) and 
 | `os/tests/` | Tests for both OS editions (static checks of the recipe, plus the boot harness) | pytest |
 | `desktop/plasma/` | macOS-style shell: `generate.py` (layout, defaults, terminal colours, start-up screen), `desktoptheme.py` (the Ambar Plasma Style: panels, popups, Dock highlights), `aurorae.py` (window decorations), `plasmoids/` (Ambar menu, app name, Control Center, Launchpad), `control-center/ambar-control-center` (backend), colour schemes, wallpaper | Python, QML |
 | `desktop/security/` | Security toolkit: `catalog.toml` (every tool: tier, category, source), `ambar-sec` CLI, `ambar-security` app (Ambar's kali-tweaks), Launchpad Security menu, `kali-default.txt` (Kali's default set, for the coverage test) | Python, TOML |
-| `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
+| `desktop/workbench/`, `desktop/guard/`, `desktop/utils/` | Ambar's own tools: Workbench (`ambar-engage` + app, `wstg.toml` OWASP checklist, `ambar-lab` practice labs, `ambar-depcheck`), Guard (`ambar-guard` + app), Clean and Share (CLI + app). Each folder has its own `tests/` | Python + PySide6 |
 | `desktop/automation-center/` | Automation Center app, Welcome, KRunner plugin | Python + PySide6/QML |
 | `desktop/icons/` | `ambar-icons`: builds the Ambar/Ambar-Dark icon themes inside the image (squircle tiles over Papirus) | Python |
 | `desktop/sounds/` | Ambar sound theme and its generator (`generate.py`, needs ffmpeg) | Python |

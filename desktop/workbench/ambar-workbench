@@ -11,17 +11,22 @@ import json
 import os
 import shlex
 import shutil
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
 from PySide6.QtCore import QProcess, Qt, QUrl
 from PySide6.QtGui import QColor, QDesktopServices
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox, QPlainTextEdit,
                                QTableWidgetItem, QVBoxLayout)
 
 ENGAGE = shutil.which("ambar-engage") or str(Path(__file__).resolve().parent / "ambar-engage")
+LAB = shutil.which("ambar-lab") or str(Path(__file__).resolve().parent / "ambar-lab")
+DEPCHECK = shutil.which("ambar-depcheck") or str(Path(__file__).resolve().parent / "ambar-depcheck")
+STATUS_LABELS = {"todo": "Not tested", "pass": "Passed", "issue": "Issue found", "na": "Not applicable"}
+STATUS_TONES = {"todo": "neutral", "pass": "good", "issue": "bad", "na": "info"}
 HOME = Path(os.environ.get("AMBAR_ENGAGEMENTS", Path.home() / "Engagements"))
 CURRENT = Path(os.environ.get("AMBAR_CONFIG", Path.home() / ".config/ambar")) / "engagement"
 TOOLS = [
@@ -172,6 +177,23 @@ class Workbench(QMainWindow):
         fw.body.addWidget(dc)
         self.tabs.add_page("Findings", fw, "dialog-warning")
 
+        # Checklist: the OWASP Web Security Testing Guide
+        cw = ui.Page("Checklist", "The OWASP Web Security Testing Guide, test by test. Linking a finding to a test "
+                     "(ambar-engage findings --wstg ID) marks it as an issue; coverage goes into the report.")
+        self.cov_done = ui.Stat("Tests done", "0", "accent")
+        self.cov_issue = ui.Stat("With issues", "0", "bad")
+        self.cov_left = ui.Stat("Not tested yet", "0", "neutral")
+        cw.body.addLayout(ui.row(self.cov_done, self.cov_issue, self.cov_left, None, spacing=12))
+        self.area = QComboBox()
+        self.area.currentIndexChanged.connect(lambda _: self.fill_checklist())
+        cw.body.addLayout(ui.row(ui.label("Area", "muted"), self.area, None))
+        self.checklist = ui.table(["Test", "What to test", "Status", "Note"], stretch=1)
+        self.checklist.verticalHeader().setDefaultSectionSize(44)
+        cw.body.addWidget(self.checklist, 1)
+        self._wstg: dict = {}
+        self._cl: dict = {}
+        self.tabs.add_page("Checklist", cw, "checkbox")
+
         # Report
         rw = ui.Page("Report", "The engagement, who authorised it, the scope, every finding by severity and the activity log.")
         rcard = ui.Card("Create a report", "Written into the engagement folder and opened when it's ready.", padding=20)
@@ -190,6 +212,42 @@ class Workbench(QMainWindow):
         rw.body.addWidget(rcard)
         rw.body.addStretch(1)
         self.tabs.add_page("Report", rw, "document-export")
+
+        # Labs: OWASP practice apps on this computer, and Dependency-Check for your own code
+        lw = ui.Page("Labs", "Practise on deliberately vulnerable OWASP apps that run on this computer only, "
+                     "and check your own projects' libraries for known vulnerabilities.")
+        self.lab_cards: dict[str, dict] = {}
+        grid = QGridLayout()
+        grid.setSpacing(14)
+        for i, (key, name, about) in enumerate((
+                ("juice-shop", "OWASP Juice Shop", "A modern web shop full of vulnerabilities across the OWASP Top 10, "
+                                                   "with a scoreboard of challenges."),
+                ("webgoat", "OWASP WebGoat", "Guided lessons: each explains a vulnerability, then lets you practise it. "
+                                            "WebWolf is its helper site."))):
+            card = ui.Card(name, about, padding=18)
+            state = ui.badge("Stopped", "neutral")
+            start = ui.button("Start", "primary", "media-playback-start")
+            stop = ui.button("Stop", None, "media-playback-stop")
+            open_ = ui.button("Open", "ghost")
+            start.clicked.connect(lambda _=False, k=key: self.lab("start", k))
+            stop.clicked.connect(lambda _=False, k=key: self.lab("stop", k))
+            open_.clicked.connect(lambda _=False, k=key: self.lab("open", k))
+            card.body.addLayout(ui.row(state, None, open_, stop, start))
+            self.lab_cards[key] = {"state": state, "start": start, "stop": stop, "open": open_}
+            grid.addWidget(card, 0, i)
+        lw.body.addLayout(grid)
+        lw.body.addWidget(ui.label("The labs listen on 127.0.0.1 only, so nothing on your network can reach them. "
+                                   "Testing this computer needs no scope, so Run and Ambar Recon work on them at once.",
+                                   "notice", wrap=True))
+        dep = ui.Card("OWASP Dependency-Check", "Finds known vulnerabilities in the libraries your own project uses "
+                      "(npm, Maven, Gradle, Python, .NET, Ruby, Go…). The project is read, never changed.", padding=18)
+        pick = ui.button("Check a project…", "primary", "folder-open")
+        pick.clicked.connect(self.depcheck)
+        dep.body.addLayout(ui.row(pick, None))
+        lw.body.addWidget(dep)
+        lw.body.addStretch(1)
+        self.tabs.add_page("Labs", lw, "applications-education")
+        self.tabs.pageChanged.connect(lambda i: i == 5 and self.refresh_labs())
 
         self.setCentralWidget(self.tabs)
         self.reload()
@@ -236,6 +294,99 @@ class Workbench(QMainWindow):
             f"{head('EXCLUDED')}<p style='line-height:160%'>{chips(s.get('exclude', []), 'bad')}</p>"
             f"<p style='color:{t['muted']}; font-size:9pt'>Folder: {esc(str(d))}</p>")
         self.load_findings()
+        self.load_checklist()
+
+    # ---------------------------------------------------------------- checklist
+
+    def load_checklist(self) -> None:
+        r = subprocess.run([sys.executable, ENGAGE, "checklist", "--json"], capture_output=True, text=True,
+                           env=os.environ)
+        if r.returncode != 0:
+            return
+        data = json.loads(r.stdout)
+        self._wstg, self._cl = data["checklist"], data["status"]
+        cov = data["coverage"]
+        done, total = sum(c["done"] for c in cov), sum(c["total"] for c in cov)
+        self.cov_done.set(f"{done}/{total}")
+        self.cov_issue.set(str(sum(c["issues"] for c in cov)))
+        self.cov_left.set(str(total - done))
+        self.area.blockSignals(True)
+        cur = self.area.currentData()
+        self.area.clear()
+        self.area.addItem(f"All areas ({total} tests)", "")
+        for c in cov:
+            self.area.addItem(f"{c['name']}  ·  {c['done']}/{c['total']}" + (f"  ·  {c['issues']} issues" if c["issues"] else ""),
+                              c["id"])
+        self.area.setCurrentIndex(max(0, self.area.findData(cur)) if cur else 0)
+        self.area.blockSignals(False)
+        self.fill_checklist()
+
+    def fill_checklist(self) -> None:
+        area = self.area.currentData()
+        rows = [t for c in self._wstg if not area or c["id"] == area for t in c["tests"]]
+        self.checklist.setRowCount(len(rows))
+        for r, t in enumerate(rows):
+            e = self._cl.get(t["id"], {})
+            self.checklist.setItem(r, 0, QTableWidgetItem(t["id"]))
+            self.checklist.setItem(r, 1, QTableWidgetItem(t["name"]))
+            box = QComboBox()
+            for key, label in STATUS_LABELS.items():
+                box.addItem(label, key)
+            box.setCurrentIndex(list(STATUS_LABELS).index(e.get("status", "todo")))
+            box.setProperty("test", t["id"])
+            box.currentIndexChanged.connect(lambda _i, b=box: self.set_status(b.property("test"), b.currentData()))
+            self.checklist.setCellWidget(r, 2, box)
+            note = QTableWidgetItem(e.get("note", ""))
+            note.setForeground(QColor(ui.theme()["muted"]))
+            self.checklist.setItem(r, 3, note)
+        self.checklist.resizeColumnToContents(0)
+        self.checklist.setColumnWidth(2, 170)
+
+    def set_status(self, test: str, status: str) -> None:
+        r = subprocess.run([sys.executable, ENGAGE, "checklist", test, "--status", status], capture_output=True,
+                           text=True, env=os.environ)
+        if r.returncode != 0:
+            QMessageBox.warning(self, "Not saved", r.stderr.strip())
+        self.load_checklist()
+
+    # ---------------------------------------------------------------- labs
+
+    def refresh_labs(self) -> None:
+        r = subprocess.run([sys.executable, LAB, "status", "--json"], capture_output=True, text=True, env=os.environ)
+        on = {x["id"] for x in json.loads(r.stdout) if x["running"]} if r.returncode == 0 else set()
+        for key, w in self.lab_cards.items():
+            running = key in on
+            w["state"].setText("Running" if running else ("Stopped" if r.returncode == 0 else "Podman missing"))
+            w["state"].setProperty("badge", "good" if running else "neutral")
+            ui.restyle(w["state"])
+            w["start"].setEnabled(not running and r.returncode == 0)
+            w["stop"].setEnabled(running)
+            w["open"].setEnabled(running)
+
+    def lab(self, action: str, key: str) -> None:
+        if action == "open":
+            subprocess.run([sys.executable, LAB, "open", key], env=os.environ)
+            return
+        self.tabs.setCurrentIndex(1)  # show progress in Run: the first start downloads the lab
+        self.output.appendPlainText(f"▶ ambar-lab {action} {key}")
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(
+            lambda: self.output.appendPlainText(bytes(self.proc.readAllStandardOutput()).decode(errors="replace").rstrip()))
+        self.proc.finished.connect(lambda *_: (self.output.appendPlainText("— done —\n"), self.refresh_labs()))
+        self.proc.start(sys.executable, [LAB, action, key])
+
+    def depcheck(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Choose your project's folder", str(Path.home()))
+        if not folder:
+            return
+        self.tabs.setCurrentIndex(1)
+        self.output.appendPlainText(f"▶ OWASP Dependency-Check: {folder}")
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(
+            lambda: self.output.appendPlainText(bytes(self.proc.readAllStandardOutput()).decode(errors="replace").rstrip()))
+        self.proc.start(sys.executable, [DEPCHECK, folder])
 
     def load_findings(self) -> None:
         d = self.engagement_dir()

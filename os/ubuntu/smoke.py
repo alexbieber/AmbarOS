@@ -33,7 +33,7 @@ pgrep -x kwin_wayland >/dev/null && echo KWIN_WAYLAND_OK
 for a in dolphin konsole kate okular gwenview elisa haruna kcalc ark spectacle systemsettings plasma-discover \
          libreoffice kmail korganizer calamares flatpak snap distrobox wine timeshift kdeconnect-app \
          ambar ambard ambar-center ambar-control-center ambar-hwreport \
-         ambar-recon ambar-engage ambar-workbench ambar-guard ambar-guard-app ambar-clean ambar-share; do
+         ambar-recon ambar-engage ambar-workbench ambar-lab ambar-depcheck ambar-guard ambar-guard-app ambar-clean ambar-share; do
   command -v "$a" >/dev/null && echo "APP_OK $a" || echo "APP_MISSING $a"
 done
 browser=$(cat /etc/ambar-browser); command -v "$browser" >/dev/null && echo "BROWSER_OK $browser"
@@ -43,6 +43,7 @@ done
 grep -h '^\(Name\|Exec\)=' /usr/share/applications/org.kde.discover.desktop | head -2
 grep -qs '^name=ambar' ~/.config/plasmarc /etc/xdg/plasmarc && [ -f /usr/share/plasma/desktoptheme/ambar/metadata.json ] && echo STYLE_OK
 [ -f /usr/share/sounds/ambar/stereo/desktop-login.oga ] && echo SOUNDS_OK
+ambar-engage checklist --json >/dev/null 2>&1; [ -f /usr/share/ambar/workbench/wstg.toml ] && echo WSTG_OK
 [ -f /usr/share/icons/Ambar/apps/scalable/org.kde.dolphin.svg ] && [ -f /usr/share/icons/Ambar-Dark/places/48x48/folder.svg ] && echo ICONS_OK
 for a in marknote gimp krita inkscape kdenlive obs vlc kweather kclock krecorder; do command -v "$a" >/dev/null || echo "APP_MISSING $a"; done
 [ -f /usr/share/konsole/Ambar.profile ] && grep -qs Ambar.profile /etc/xdg/konsolerc && echo TERMINAL_OK
@@ -75,6 +76,7 @@ EXPECT = [
     ("ambar terminal", r"^TERMINAL_OK"),
     ("ambar sounds", r"^SOUNDS_OK"),
     ("ambar icons", r"^ICONS_OK"),
+    ("owasp checklist", r"^WSTG_OK"),
     ("browser", r"^BROWSER_OK "),
     ("ambar store", r"^Name=Ambar Store"),
     ("installer", r"^APP_OK calamares"),

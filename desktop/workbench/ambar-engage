@@ -6,6 +6,8 @@
     ambar-engage run TOOL TARGET [-- EXTRA ARGS]      every target is checked against the scope first
     ambar-engage findings [--add TITLE --severity S --target T --detail TEXT]
     ambar-engage report [--format md|html|pdf]
+    ambar-engage checklist [--category INPV]          OWASP WSTG coverage for this engagement
+    ambar-engage checklist WSTG-INPV-05 --status pass|issue|na|todo [--note TEXT]
 
 An engagement is a folder (~/Engagements/<name>) holding scope.toml, every run's
 output, the findings and the report. Scope checks use ambar-recon's checker, so
@@ -32,6 +34,7 @@ HOME = Path(os.environ.get("AMBAR_ENGAGEMENTS", Path.home() / "Engagements"))
 CURRENT = Path(os.environ.get("AMBAR_CONFIG", Path.home() / ".config/ambar")) / "engagement"
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 RECON = os.environ.get("AMBAR_RECON", shutil.which("ambar-recon") or "ambar-recon")
+STATUSES = ["todo", "pass", "issue", "na"]  # not tested yet, tested and fine, found a problem, not applicable
 
 # Exposed services that are usually a finding by themselves.
 RISKY_PORTS = {
@@ -296,7 +299,13 @@ def cmd_findings(a) -> int:
         ok, why = in_scope(d, a.target)
         if not ok:
             raise Fail(f"{a.target} is outside the scope: {why}")
-        f.append(finding(a.add, a.severity, a.target, a.detail or "", "manual"))
+        x = finding(a.add, a.severity, a.target, a.detail or "", "manual")
+        if a.wstg:
+            if a.wstg.upper() not in wstg_tests():
+                raise Fail(f"{a.wstg} isn't a WSTG test ID (see: ambar-engage checklist)")
+            x["wstg"] = a.wstg.upper()
+            mark(d, a.wstg, "issue")
+        f.append(x)
         save_findings(d, f)
         log(d, f"FINDING {a.severity} {a.target}: {a.add}")
         print("Added.")
@@ -307,6 +316,84 @@ def cmd_findings(a) -> int:
     for x in f:
         print(f"[{x['severity'].upper():<8}] {x['target']:<28} {x['title']}")
     print(f"\n{len(f)} findings: " + ", ".join(f"{sum(x['severity'] == s for x in f)} {s}" for s in SEVERITIES))
+    return 0
+
+
+# ----------------------------------------------------------------- OWASP WSTG checklist
+
+def wstg() -> dict:
+    """The OWASP Web Security Testing Guide checklist (wstg.toml)."""
+    for p in (os.environ.get("AMBAR_WSTG"), Path(__file__).resolve().parent / "wstg.toml",
+              "/usr/share/ambar/workbench/wstg.toml"):
+        if p and Path(p).exists():
+            return tomllib.loads(Path(p).read_text())
+    raise Fail("the OWASP WSTG checklist (wstg.toml) isn't installed")
+
+
+def wstg_tests() -> dict[str, tuple[str, str]]:
+    """{test id: (category name, test name)}"""
+    return {t["id"]: (c["name"], t["name"]) for c in wstg()["category"] for t in c["tests"]}
+
+
+def load_checklist(d: Path) -> dict:
+    try:
+        return json.loads((d / "checklist.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def mark(d: Path, test: str, status: str, note: str | None = None) -> None:
+    tests = wstg_tests()
+    test = test.upper()
+    if test not in tests:
+        raise Fail(f"{test} isn't a WSTG test ID (see: ambar-engage checklist)")
+    cl = load_checklist(d)
+    entry = cl.get(test, {})
+    entry["status"] = status
+    if note is not None:
+        entry["note"] = note
+    entry["updated"] = dt.datetime.now().isoformat(timespec="seconds")
+    cl[test] = entry
+    (d / "checklist.json").write_text(json.dumps(cl, indent=2, sort_keys=True) + "\n")
+    log(d, f"CHECKLIST {test} {status}" + (f": {note}" if note else ""))
+
+
+def coverage(d: Path) -> list[dict]:
+    """Per category: tests, how many are done (pass, issue or n/a) and how many found issues."""
+    cl = load_checklist(d)
+    out = []
+    for c in wstg()["category"]:
+        ids = [t["id"] for t in c["tests"]]
+        st = [cl.get(i, {}).get("status", "todo") for i in ids]
+        out.append({"id": c["id"], "name": c["name"], "total": len(ids),
+                    "done": sum(x != "todo" for x in st), "issues": sum(x == "issue" for x in st)})
+    return out
+
+
+def cmd_checklist(a) -> int:
+    d = current()
+    if a.test:
+        if not a.status:
+            raise Fail("say what to record: --status pass|issue|na|todo")
+        mark(d, a.test, a.status, a.note)
+        print(f"{a.test.upper()}: {a.status}")
+        return 0
+    cl = load_checklist(d)
+    if a.json:
+        print(json.dumps({"checklist": wstg()["category"], "status": cl, "coverage": coverage(d)}, indent=2))
+        return 0
+    mark_of = {"todo": " ", "pass": "✓", "issue": "!", "na": "–"}
+    for c in wstg()["category"]:
+        if a.category and c["id"] != a.category.upper():
+            continue
+        print(f"\n{c['name']} ({c['id']})")
+        for t in c["tests"]:
+            e = cl.get(t["id"], {})
+            note = f"  — {e['note']}" if e.get("note") else ""
+            print(f"  [{mark_of[e.get('status', 'todo')]}] {t['id']:<14} {t['name']}{note}")
+    cov = coverage(d)
+    done, total = sum(c["done"] for c in cov), sum(c["total"] for c in cov)
+    print(f"\nOWASP WSTG coverage: {done} of {total} tests done, {sum(c['issues'] for c in cov)} with issues.")
     return 0
 
 
@@ -334,9 +421,26 @@ def report_markdown(d: Path) -> str:
         lines += [f"### {i}. {x['title']}", "",
                   f"- **Severity:** {x['severity'].capitalize()}",
                   f"- **Target:** `{x['target']}`",
-                  f"- **Source:** {x['source']}, {x['found']}", ""]
+                  f"- **Source:** {x['source']}, {x['found']}"]
+        if x.get("wstg"):
+            lines.append(f"- **OWASP WSTG:** {x['wstg']} ({wstg_tests().get(x['wstg'], ('', ''))[1]})")
+        lines.append("")
         if x["detail"]:
             lines += [x["detail"], ""]
+    if load_checklist(d):
+        cov = coverage(d)
+        done, total = sum(c["done"] for c in cov), sum(c["total"] for c in cov)
+        lines += ["## Testing coverage (OWASP WSTG)", "",
+                  f"{done} of {total} tests in the OWASP Web Security Testing Guide were done "
+                  "(passed, found an issue, or not applicable).", "",
+                  "| Area | Done | Issues |", "|---|---|---|"]
+        lines += [f"| {c['name']} | {c['done']} of {c['total']} | {c['issues']} |" for c in cov]
+        notes = [(i, e) for i, e in sorted(load_checklist(d).items()) if e.get("note")]
+        if notes:
+            names = wstg_tests()
+            lines += ["", "Tester's notes:", ""]
+            lines += [f"- **{i}** {names.get(i, ('', ''))[1]} ({e['status']}): {e['note']}" for i, e in notes]
+        lines.append("")
     runs = sorted((d / "runs").glob("*.log"))
     lines += ["## Activity", "", f"{len(runs)} tool runs. Full log: `activity.log`; raw output in `runs/`.", ""]
     if (d / "activity.log").exists():
@@ -449,6 +553,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--severity", choices=SEVERITIES, default="medium")
     s.add_argument("--target")
     s.add_argument("--detail")
+    s.add_argument("--wstg", metavar="ID", help="the OWASP WSTG test this finding belongs to, e.g. WSTG-INPV-05")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("checklist", help="OWASP Web Security Testing Guide checklist")
+    s.add_argument("test", nargs="?", help="a test ID to record, e.g. WSTG-INPV-05")
+    s.add_argument("--status", choices=STATUSES)
+    s.add_argument("--note")
+    s.add_argument("--category", help="show one area, e.g. INPV")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("report", help="write the report")
     s.add_argument("--format", choices=["md", "html", "pdf"], default="pdf")
@@ -457,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
         a.extra = a.extra[1:]
     try:
         return {"new": cmd_new, "list": cmd_list, "use": cmd_use, "show": cmd_show, "run": cmd_run,
-                "findings": cmd_findings, "report": cmd_report}[a.cmd](a)
+                "findings": cmd_findings, "report": cmd_report, "checklist": cmd_checklist}[a.cmd](a)
     except Fail as e:
         print(f"ambar-engage: {e}", file=sys.stderr)
         return 2

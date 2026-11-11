@@ -137,6 +137,7 @@ QPushButton[kind="primary"]:hover {{ background: {mix(t['accent'], t['text'], 0.
 QPushButton[kind="primary"]:disabled {{ background: {t['surface2']}; color: {t['muted']}; border-color: {t['border']}; }}
 QPushButton[kind="danger"] {{ color: {t['bad']}; }}
 QPushButton[kind="ghost"] {{ background: transparent; border: 0; color: {t['accent']}; padding: 4px 6px; }}
+QPushButton[kind="ghost"]:disabled {{ color: {t['muted']}; background: transparent; }}
 
 /* Inputs */
 QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{ background: {t['surface']}; border: 1px solid {t['border']};

@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""ambar-lab: OWASP practice labs on this computer, to learn web security legally.
+
+    ambar-lab list                  the labs and whether they're running
+    ambar-lab start juice-shop      start a lab (downloads it the first time)
+    ambar-lab open juice-shop       open it in the browser
+    ambar-lab stop juice-shop       stop it (nothing is left running)
+    ambar-lab status [--json]
+
+The labs are deliberately vulnerable apps made by OWASP for practice. Each runs in a
+Podman container that listens on 127.0.0.1 only, so nothing on the network can reach
+it. Testing your own computer needs no scope file, so Workbench and Ambar Recon work
+on the labs straight away.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+PREFIX = "ambar-lab-"
+LABS = {
+    "juice-shop": {
+        "name": "OWASP Juice Shop",
+        "about": "A modern web shop full of vulnerabilities across the OWASP Top 10, with a scoreboard of challenges.",
+        "image": "docker.io/bkimminich/juice-shop:latest",
+        "ports": [(3000, 3000)],
+        "url": "http://127.0.0.1:3000/",
+    },
+    "webgoat": {
+        "name": "OWASP WebGoat",
+        "about": "Guided lessons: each explains a vulnerability, then lets you exploit it. WebWolf is its helper site.",
+        "image": "docker.io/webgoat/webgoat:latest",
+        "ports": [(8080, 8080), (9090, 9090)],
+        "url": "http://127.0.0.1:8080/WebGoat/",
+        "extra_urls": {"WebWolf": "http://127.0.0.1:9090/WebWolf/"},
+    },
+}
+
+
+class Fail(Exception):
+    pass
+
+
+def podman() -> str:
+    p = os.environ.get("AMBAR_PODMAN") or shutil.which("podman")
+    if not p:
+        raise Fail("Podman isn't installed (sudo apt install podman)")
+    return p
+
+
+def running() -> set[str]:
+    r = subprocess.run([podman(), "ps", "--format", "{{.Names}}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Fail(r.stderr.strip() or "podman ps failed")
+    return {n[len(PREFIX):] for n in r.stdout.split() if n.startswith(PREFIX)}
+
+
+def lab(name: str) -> dict:
+    if name not in LABS:
+        raise Fail(f"no lab called {name!r}; choose from: {', '.join(LABS)}")
+    return LABS[name]
+
+
+def run_command(name: str) -> list[str]:
+    """The container command. Ports are published on 127.0.0.1 only: never on the network."""
+    cfg = lab(name)
+    cmd = [podman(), "run", "-d", "--rm", "--name", PREFIX + name, "--pull=missing"]
+    for host, inside in cfg["ports"]:
+        cmd += ["-p", f"127.0.0.1:{host}:{inside}"]
+    tz = os.environ.get("TZ")
+    if tz:
+        cmd += ["-e", f"TZ={tz}"]
+    return cmd + [cfg["image"]]
+
+
+def cmd_list(_a) -> int:
+    on = running()
+    for key, cfg in LABS.items():
+        state = "running" if key in on else "stopped"
+        print(f"{key:<12} {state:<8} {cfg['name']}: {cfg['about']}")
+        if key in on:
+            print(f"{'':<22}{cfg['url']}")
+    return 0
+
+
+def cmd_status(a) -> int:
+    on = running()
+    data = [{"id": k, **{x: v for x, v in c.items() if x != "ports"}, "running": k in on} for k, c in LABS.items()]
+    if a.json:
+        print(json.dumps(data, indent=2))
+    else:
+        for x in data:
+            print(f"{x['id']}: {'running at ' + x['url'] if x['running'] else 'stopped'}")
+    return 0
+
+
+def cmd_start(a) -> int:
+    cfg = lab(a.lab)
+    if a.lab in running():
+        print(f"{cfg['name']} is already running: {cfg['url']}")
+        return 0
+    print(f"Starting {cfg['name']} (the first start downloads it, which can take a few minutes)…")
+    r = subprocess.run(run_command(a.lab))
+    if r.returncode != 0:
+        raise Fail(f"{cfg['name']} didn't start; is something else using port {cfg['ports'][0][0]}?")
+    print(f"{cfg['name']} is running on this computer only: {cfg['url']}")
+    for label, url in cfg.get("extra_urls", {}).items():
+        print(f"{label}: {url}")
+    print("It may take a minute before the page loads. Stop it with: ambar-lab stop " + a.lab)
+    return 0
+
+
+def cmd_stop(a) -> int:
+    cfg = lab(a.lab)
+    if a.lab not in running():
+        print(f"{cfg['name']} isn't running.")
+        return 0
+    subprocess.run([podman(), "stop", PREFIX + a.lab], capture_output=True)
+    print(f"Stopped {cfg['name']}.")
+    return 0
+
+
+def cmd_open(a) -> int:
+    cfg = lab(a.lab)
+    if a.lab not in running():
+        raise Fail(f"{cfg['name']} isn't running; start it with: ambar-lab start {a.lab}")
+    opener = shutil.which("xdg-open")
+    if not opener:
+        print(cfg["url"])
+        return 0
+    subprocess.Popen([opener, cfg["url"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-lab", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("list", help="the labs and whether they're running")
+    s = sub.add_parser("status", help="which labs are running")
+    s.add_argument("--json", action="store_true")
+    for c in ("start", "stop", "open"):
+        s = sub.add_parser(c, help=f"{c} a lab")
+        s.add_argument("lab", choices=list(LABS))
+    a = ap.parse_args(argv)
+    try:
+        return {"list": cmd_list, "status": cmd_status, "start": cmd_start, "stop": cmd_stop, "open": cmd_open}[a.cmd](a)
+    except Fail as e:
+        print(f"ambar-lab: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

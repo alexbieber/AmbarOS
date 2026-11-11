@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""ambar-depcheck: check your own project's libraries for known vulnerabilities (OWASP Dependency-Check).
+
+    ambar-depcheck ~/code/my-app                 report in ~/code/my-app/dependency-check-report/
+    ambar-depcheck ~/code/my-app --format JSON --out /tmp/report
+    NVD_API_KEY=… ambar-depcheck ~/code/my-app   much faster first run (free key from nvd.nist.gov)
+
+It reads the project's dependency files (Maven, Gradle, npm, Python, .NET, Ruby, Go and
+more) and matches them against public vulnerability databases. The project folder is
+mounted read-only: nothing in it is changed. It runs OWASP's own container image with
+Podman; the vulnerability database is kept in ~/.cache/ambar/dependency-check, so
+only the first run downloads it in full.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+IMAGE = "docker.io/owasp/dependency-check:latest"
+FORMATS = ["HTML", "JSON", "XML", "CSV", "SARIF", "ALL"]
+
+
+def command(project: Path, out: Path, data: Path, fmt: str, api_key: str | None) -> list[str]:
+    podman = os.environ.get("AMBAR_PODMAN") or shutil.which("podman") or "podman"
+    cmd = [podman, "run", "--rm", "--pull=missing",
+           "-v", f"{project}:/src:ro,Z",                       # read-only: the project is never changed
+           "-v", f"{data}:/usr/share/dependency-check/data:Z",
+           "-v", f"{out}:/report:Z",
+           IMAGE, "--scan", "/src", "--format", fmt, "--project", project.name, "--out", "/report"]
+    if api_key:
+        cmd += ["--nvdApiKey", api_key]
+    return cmd
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="ambar-depcheck", description=__doc__.split("\n")[0])
+    ap.add_argument("project", type=Path, help="the folder of your project")
+    ap.add_argument("--out", type=Path, help="where to write the report (default: <project>/dependency-check-report)")
+    ap.add_argument("--format", choices=FORMATS, default="HTML")
+    a = ap.parse_args(argv)
+    project = a.project.expanduser().resolve()
+    if not project.is_dir():
+        print(f"ambar-depcheck: {a.project} isn't a folder", file=sys.stderr)
+        return 2
+    if not (os.environ.get("AMBAR_PODMAN") or shutil.which("podman")):
+        print("ambar-depcheck: Podman isn't installed (sudo apt install podman)", file=sys.stderr)
+        return 2
+    out = (a.out or project / "dependency-check-report").expanduser().resolve()
+    data = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "ambar" / "dependency-check"
+    out.mkdir(parents=True, exist_ok=True)
+    data.mkdir(parents=True, exist_ok=True)
+    key = os.environ.get("NVD_API_KEY")
+    if not key:
+        print("Tip: a free NVD API key (nvd.nist.gov/developers/request-an-api-key) makes the first run much faster.")
+    print(f"Checking {project} … (the first run downloads the vulnerability database)")
+    r = subprocess.run(command(project, out, data, a.format, key))
+    if r.returncode != 0:
+        print("ambar-depcheck: the check didn't finish; see the messages above", file=sys.stderr)
+        return r.returncode
+    print(f"Report: {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

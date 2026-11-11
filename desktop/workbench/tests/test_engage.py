@@ -133,3 +133,39 @@ def test_nmap_and_nuclei_output_is_imported(tmp_path):
                                                      "info": {"name": "Exposed .git config", "severity": "medium", "description": "d"}}) + "\n")
     f = mod.import_results("nuclei", "x.lab.example", out)
     assert f[0]["severity"] == "medium" and f[0]["source"] == "nuclei:git-config"
+
+
+def test_owasp_wstg_checklist_tracks_coverage_and_reaches_the_report(tmp_path):
+    import tomllib
+    d = new(tmp_path)
+    wstg = tomllib.loads((ROOT / "desktop/workbench/wstg.toml").read_text())
+    ids = [t["id"] for c in wstg["category"] for t in c["tests"]]
+    assert len(wstg["category"]) == 12 and len(ids) == 109 and len(set(ids)) == 109
+    assert {"WSTG-INPV-05", "WSTG-ATHZ-04", "WSTG-SESS-10", "WSTG-APIT-99", "WSTG-CONF-14"} <= set(ids)
+
+    r = engage(tmp_path, "checklist")
+    assert r.returncode == 0 and "0 of 109 tests done" in r.stdout and "WSTG-INPV-05" in r.stdout
+    assert engage(tmp_path, "checklist", "WSTG-CONF-07", "--status", "pass").returncode == 0
+    assert engage(tmp_path, "checklist", "wstg-conf-11", "--status", "na", "--note", "no cloud storage").returncode == 0
+    r = engage(tmp_path, "checklist", "WSTG-NOPE-01", "--status", "pass")
+    assert r.returncode == 2 and "isn't a WSTG test" in r.stderr
+    assert engage(tmp_path, "checklist", "WSTG-CONF-07").returncode == 2, "a status is required"
+
+    # A finding linked to a WSTG test marks that test as an issue.
+    r = engage(tmp_path, "findings", "--add", "Order total can be changed by the client", "--severity", "high",
+               "--target", "192.0.2.10", "--wstg", "WSTG-BUSL-01")
+    assert r.returncode == 0, r.stderr
+    cl = json.loads((d / "checklist.json").read_text())
+    assert cl["WSTG-BUSL-01"]["status"] == "issue" and cl["WSTG-CONF-11"]["note"] == "no cloud storage"
+    r = engage(tmp_path, "checklist", "--category", "conf")
+    assert "[✓] WSTG-CONF-07" in r.stdout and "[–] WSTG-CONF-11" in r.stdout and "WSTG-INPV" not in r.stdout.split("coverage")[0]
+    cov = json.loads(engage(tmp_path, "checklist", "--json").stdout)["coverage"]
+    assert next(c for c in cov if c["id"] == "BUSL")["issues"] == 1
+    assert sum(c["done"] for c in cov) == 3
+
+    assert engage(tmp_path, "report", "--format", "md").returncode == 0
+    md = (d / "report.md").read_text()
+    assert "## Testing coverage (OWASP WSTG)" in md and "3 of 109 tests" in md
+    assert "**OWASP WSTG:** WSTG-BUSL-01 (Test Business Logic Data Validation)" in md
+    assert "WSTG-CONF-11" in md and "no cloud storage" in md
+    assert "CHECKLIST WSTG-CONF-07 pass" in (d / "activity.log").read_text()

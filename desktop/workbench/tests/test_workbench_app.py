@@ -53,6 +53,20 @@ def test_workbench_flow(tmp_path):
         w.target.setText("198.51.100.9"); w.run_tool(); wait()
         assert "refused" in w.output.toPlainText() and w.findings.rowCount() == 1
 
+        # OWASP checklist page: changing a status in the table records it for the engagement.
+        w.tabs.setCurrentIndex(3); app.processEvents()
+        assert w.checklist.rowCount() == 109, w.checklist.rowCount()
+        w.area.setCurrentIndex(w.area.findData("CONF")); app.processEvents()
+        assert w.checklist.item(0, 0).text() == "WSTG-CONF-01"
+        box = w.checklist.cellWidget(6, 2)
+        assert box.property("test") == "WSTG-CONF-07"
+        box.setCurrentIndex(1); app.processEvents()   # Passed
+        import json as _j
+        from pathlib import Path
+        cl = _j.loads((Path({str(tmp_path / 'E')!r}) / "lab/checklist.json").read_text())
+        assert cl["WSTG-CONF-07"]["status"] == "pass", cl
+        assert w.cov_done.value.text() == "1/109"
+
         w.report("pdf"); wait()
         assert "report.pdf" in w.report_status.text(), w.report_status.text()
         w.resize(1180, 760); w.tabs.setCurrentIndex(2); app.processEvents()

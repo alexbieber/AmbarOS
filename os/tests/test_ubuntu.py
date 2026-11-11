@@ -205,7 +205,7 @@ def fake_live_console(path, good=True, flavor="standard", sec_broken=False):
         out += ["BROWSER_OK falkon"]
         out += [f"WIDGET_OK {w}" for w in ["os.ambar.menu", "os.ambar.appname", "os.ambar.controlcenter",
                                            "os.ambar.launchpad", "org.kde.plasma.appmenu", "org.kde.plasma.icontasks"]]
-        out += ["STYLE_OK", "TERMINAL_OK", "SOUNDS_OK", "ICONS_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
+        out += ["STYLE_OK", "TERMINAL_OK", "SOUNDS_OK", "ICONS_OK", "WSTG_OK", "Name=Ambar Store", "FLATHUB_OK", "active", "AMBARD_OK",
                 '{"wifi": null, "volume": {"value": 40, "muted": false}}', "SEC_CLI_OK"]
         if flavor == "security":
             out += ["FLAVOR_SECURITY", "SEC_TOOL_OK nmap", "SEC_TOOL_OK nuclei"]

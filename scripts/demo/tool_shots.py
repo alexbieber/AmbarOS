@@ -96,10 +96,20 @@ APPS = {
              ("info", "shop.acme.example", "nginx 1.26, PHP 8.3, WordPress", "ambar-recon")]
         (d / "findings.json").write_text(json.dumps([dict(severity=s, target=t, title=x, source=src, detail="", found="2026-11-12T10:42:00")
                                                      for s, t, x, src in F]))
-        os.environ.update(AMBAR_ENGAGEMENTS=str(E), AMBAR_CONFIG={tmp!r} + "/cfg")
+        import datetime
+        cl = {{t: {{"status": st, "updated": "2026-11-12T10:00:00"}} for t, st in (
+            ("WSTG-INFO-01", "pass"), ("WSTG-INFO-02", "pass"), ("WSTG-INFO-03", "pass"), ("WSTG-INFO-06", "pass"),
+            ("WSTG-CONF-02", "issue"), ("WSTG-CONF-06", "pass"), ("WSTG-CONF-07", "issue"), ("WSTG-CONF-11", "na"),
+            ("WSTG-ATHN-02", "issue"), ("WSTG-SESS-02", "issue"), ("WSTG-CRYP-01", "pass"))}}
+        cl["WSTG-CONF-11"]["note"] = "No cloud storage in scope"
+        (d / "checklist.json").write_text(json.dumps(cl))
+        fake = Path({tmp!r}) / "podman"
+        fake.write_text(chr(10).join(["#!/bin/sh", '[ "$1" = ps ] && echo ambar-lab-juice-shop', "exit 0", ""])); fake.chmod(0o755)
+        os.environ.update(AMBAR_ENGAGEMENTS=str(E), AMBAR_CONFIG={tmp!r} + "/cfg", AMBAR_PODMAN=str(fake))
         m = load({root!r} + "/desktop/workbench/ambar-workbench", "app")
         w = m.Workbench()
         w.findings.selectRow(0); w.show_detail(0, 0)
+        w.refresh_labs()
         save(w, (1180, 780), int(os.environ.get("SHOT_PAGE", "2")))
     """),
 }

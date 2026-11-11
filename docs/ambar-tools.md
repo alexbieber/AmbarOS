@@ -5,7 +5,9 @@ Tools written for Ambar OS, not taken from another distribution. Each one is a c
 | Tool | Command | App | What it's for |
 |---|---|---|---|
 | **Ambar Recon** | `ambar-recon` | used by Workbench | Fast scanner: ports and services, web fingerprint, TLS, subdomains |
-| **Ambar Workbench** | `ambar-engage` | Launchpad → Security | A security engagement from scope to report |
+| **Ambar Workbench** | `ambar-engage` | Launchpad → Security | A security engagement from scope to report, with the OWASP testing checklist |
+| **Practice labs** | `ambar-lab` | Workbench → Labs | OWASP Juice Shop and WebGoat, on this computer only |
+| **Dependency-Check** | `ambar-depcheck` | Workbench → Labs | Known vulnerabilities in your own project's libraries (OWASP) |
 | **Ambar Guard** | `ambar-guard` | Launchpad → System | Check and fix this computer's security; see which apps use the network |
 | **Ambar Clean** | `ambar-clean` | Launchpad → Utilities | Free disk space safely |
 | **Ambar Share** | `ambar-share` | Launchpad → Internet | Send files to a phone or computer on the same Wi-Fi |
@@ -88,6 +90,58 @@ The **Workbench app** does the same in a window: engagements in the sidebar, and
 === "Dark"
 
     ![Ambar Workbench in dark mode](images/os/workbench-dark.jpg)
+
+### OWASP testing checklist
+
+Every engagement carries the [OWASP Web Security Testing Guide](https://owasp.org/www-project-web-security-testing-guide/) checklist: 109 tests in 12 areas, from information gathering to API testing. Mark each test as passed, issue found or not applicable, with a note. A finding linked to a test marks it as an issue, and the report gets a coverage section.
+
+```sh
+ambar-engage checklist                                   # every test, with its status
+ambar-engage checklist --category INPV                   # one area
+ambar-engage checklist WSTG-CONF-07 --status pass
+ambar-engage checklist WSTG-CONF-11 --status na --note "no cloud storage"
+ambar-engage findings --add "Order total can be changed" --severity high --target 203.0.113.10 --wstg WSTG-BUSL-01
+```
+
+The **Checklist** page in the Workbench does the same, with coverage per area.
+
+=== "Light"
+
+    ![Workbench checklist](images/os/workbench-checklist.jpg)
+
+=== "Dark"
+
+    ![Workbench checklist in dark mode](images/os/workbench-checklist-dark.jpg)
+
+## Practice labs
+
+Learn on deliberately vulnerable apps made by OWASP, on your own computer, before you test anything real. Each lab runs in a container that listens on 127.0.0.1 only, so nothing on your network can reach it.
+
+```sh
+ambar-lab list
+ambar-lab start juice-shop      # OWASP Juice Shop: http://127.0.0.1:3000/
+ambar-lab start webgoat         # OWASP WebGoat: http://127.0.0.1:8080/WebGoat/ (WebWolf on 9090)
+ambar-lab stop juice-shop
+```
+
+The first start downloads the lab, which takes a few minutes. Testing your own computer needs no scope, so Workbench and Ambar Recon work on the labs straight away. The **Labs** page in the Workbench starts, stops and opens them.
+
+## Check your own code: OWASP Dependency-Check
+
+```sh
+ambar-depcheck ~/code/my-app              # HTML report in ~/code/my-app/dependency-check-report/
+NVD_API_KEY=… ambar-depcheck ~/code/my-app # much faster first run (free key from nvd.nist.gov)
+```
+
+It finds known vulnerabilities in the libraries your project uses (npm, Maven, Gradle, Python, .NET, Ruby, Go and more). The project folder is mounted read-only, and the vulnerability database is cached in `~/.cache/ambar/dependency-check`.
+
+=== "Light"
+
+    ![Workbench labs](images/os/workbench-labs.jpg)
+
+=== "Dark"
+
+    ![Workbench labs in dark mode](images/os/workbench-labs-dark.jpg)
 
 ## Ambar Guard
 
