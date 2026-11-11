@@ -157,3 +157,8 @@ done
 test -x /usr/bin/ambar-control-center
 test -f /usr/share/aurorae/themes/Ambar/decoration.svg
 test -f /usr/share/plasma/look-and-feel/os.ambar.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+
+# Search (KRunner) starts on demand; KDE's unit allows only a few seconds,
+# which slow or emulated machines can miss. Give it time.
+install -d /usr/lib/systemd/user/plasma-krunner.service.d
+printf '[Service]\nTimeoutStartSec=90\n' > /usr/lib/systemd/user/plasma-krunner.service.d/50-ambar-timeout.conf

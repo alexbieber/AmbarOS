@@ -1,7 +1,8 @@
 #!/bin/bash
 # OS identity: "Ambar OS", based on Ubuntu (ID_LIKE keeps Ubuntu tooling working).
 set -euo pipefail
-. /usr/lib/os-release
+# Read Ubuntu's originals (the diverted copies on a re-run) so this is idempotent.
+. "$(dpkg-divert --truename /usr/lib/os-release)"
 dpkg-divert --quiet --local --rename --add /usr/lib/os-release
 cat > /usr/lib/os-release <<OS
 PRETTY_NAME="Ambar OS ${AMBAR_VERSION}"
@@ -19,6 +20,16 @@ BUG_REPORT_URL="https://github.com/alexbieber/AmbarOS/issues"
 LOGO=ambar-logo
 OS
 ln -sf ../usr/lib/os-release /etc/os-release
+# lsb_release: keep DISTRIB_ID/CODENAME as Ubuntu so PPAs and vendor .deb
+# installers that check them keep working; only the description is ours.
+. "$(dpkg-divert --truename /etc/lsb-release)"
+dpkg-divert --quiet --local --rename --add /etc/lsb-release
+cat > /etc/lsb-release <<LSB
+DISTRIB_ID=${DISTRIB_ID}
+DISTRIB_RELEASE=${DISTRIB_RELEASE}
+DISTRIB_CODENAME=${DISTRIB_CODENAME}
+DISTRIB_DESCRIPTION="Ambar OS ${AMBAR_VERSION} (based on ${DISTRIB_DESCRIPTION})"
+LSB
 printf 'Ambar OS %s \\n \\l\n\n' "$AMBAR_VERSION" > /etc/issue
 echo "Ambar OS $AMBAR_VERSION" > /etc/issue.net
 # Live session user (casper).

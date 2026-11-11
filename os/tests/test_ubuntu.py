@@ -56,6 +56,9 @@ def test_hooks_run_in_order_and_initramfs_last():
     assert 'NAME="Ambar OS"' in identity and 'ID_LIKE="ubuntu debian"' in identity
     assert "dpkg-divert" in identity, "os-release must survive base-files upgrades"
     assert 'USERNAME="ambar"' in identity
+    # lsb-release: Ubuntu ID kept for PPAs, our description; re-runs read the originals.
+    assert "/etc/lsb-release" in identity and "DISTRIB_ID=${DISTRIB_ID}" in identity
+    assert identity.count("dpkg-divert --truename") == 2
 
 
 def test_desktop_defaults_hook():
@@ -225,3 +228,40 @@ def test_install_anything_file_handlers():
     assert "application/vnd.debian.binary-package=org.kde.discover.desktop" in h, ".deb opens in the Ambar Store"
     assert "application/x-ms-dos-executable=wine.desktop" in h, ".exe opens with Wine"
     assert "Exec=wine start /unix %f" in h
+
+
+def test_installer_launches_on_wayland_and_has_no_kubuntu_names():
+    h = (U / "hooks" / "40-installer.chroot").read_text()
+    # sudo resets the environment: the launcher must pass the display through.
+    assert "exec sudo /usr/bin/env" in h and 'WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}"' in h
+    assert "Exec=ambar-installer" in h
+    assert '"ambar_root"' in h and "batch-identifier: ambar-" in h
+    assert "sudo -H -u ambar xdg-open" in h
+    assert "libxcb-cursor0" in listfile(U / "packages.txt"), "Qt's X11 fallback needs it"
+
+
+def test_installer_steps_match_ubuntu_2604_rootfs():
+    """Each of these broke a real install in QEMU before it was fixed."""
+    mods = U / "overlay/etc/calamares/modules"
+    # Kubuntu's step copies a cdrom.sources file our image doesn't have.
+    ctx = yaml.safe_load((mods / "before_bootloader_context.conf").read_text())
+    assert "cdrom.sources" not in str(ctx) and ctx["firmwareType"]["bios"] == "-/bin/true"
+    rm = yaml.safe_load((mods / "shellprocess_rmcdrom.conf").read_text())
+    assert all("rm -f" in s or s.startswith("-") for s in rm["script"])
+    # The mirror step deletes /etc/apt/sources.list and fails if it's missing.
+    assert "sources have moved" in (U / "build.sh").read_text()
+    assert yaml.safe_load((mods / "automirror.conf").read_text())["distribution"] == "Ambar"
+
+
+def test_only_one_installer_launcher():
+    h = (U / "hooks" / "40-installer.chroot").read_text()
+    assert "NoDisplay=true" in h and "grep -q '^Exec=ambar-installer'" in h
+
+
+def test_installer_package_cleanup_tolerates_missing_packages():
+    # apt-get remove fails the whole install on one unknown name (kubuntu-installer-prompt).
+    conf = yaml.safe_load((U / "overlay/etc/calamares/modules/packages.conf").read_text())
+    keys = [k for op in conf["operations"] for k in op]
+    assert "remove" not in keys and "try_remove" in keys
+    removed = next(op["try_remove"] for op in conf["operations"] if "try_remove" in op)
+    assert "calamares" in removed and "^live-*" in removed

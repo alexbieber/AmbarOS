@@ -50,21 +50,23 @@ in_root() { chroot "$ROOT" /usr/bin/env -i HOME=/root PATH=/usr/sbin:/usr/bin:/s
   DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 "$@"; }
 
 rootfs() {
-  if [ -f "$ROOT/.debootstrap-done" ] && [ -z "${FRESH:-}" ]; then
+  if [ -f "$WORK/.debootstrap-done" ] && [ -d "$ROOT/usr" ] && [ -z "${FRESH:-}" ]; then
     log "reusing base system in $ROOT (FRESH=1 to start over)"
   else
     log "debootstrap $SUITE"
-    rm -rf "$ROOT"; mkdir -p "$ROOT"
+    rm -rf "$ROOT" "$WORK/.debootstrap-done"; mkdir -p "$ROOT"
     local script=/usr/share/debootstrap/scripts/$SUITE
     [ -e "$script" ] || script=/usr/share/debootstrap/scripts/gutsy
     debootstrap --arch=amd64 --components=main,restricted,universe,multiverse \
       "$SUITE" "$ROOT" "$MIRROR" "$script"
-    touch "$ROOT/.debootstrap-done"
+    touch "$WORK/.debootstrap-done"   # outside the rootfs, so the ISO step leaves it
   fi
 
   trap mounts_down EXIT
   mounts_up
-  rm -f "$ROOT/etc/apt/sources.list"
+  # Stock Ubuntu keeps a one-line stub here; the installer's mirror step removes it
+  # and fails if it's missing.
+  echo "# Ubuntu sources have moved to /etc/apt/sources.list.d/ubuntu.sources" > "$ROOT/etc/apt/sources.list"
   cat > "$ROOT/etc/apt/sources.list.d/ubuntu.sources" <<EOF
 Types: deb
 URIs: $MIRROR
@@ -171,7 +173,7 @@ ambar() {
 iso() {
   log "clean up rootfs"
   mounts_down
-  rm -f "$ROOT/usr/sbin/policy-rc.d" "$ROOT/.debootstrap-done"
+  rm -f "$ROOT/usr/sbin/policy-rc.d"
   rm -rf "$ROOT/var/cache/apt/archives/"*.deb "$ROOT/var/lib/apt/lists/"* "$ROOT/tmp/"* "$ROOT/root/.cache"
   : > "$ROOT/etc/machine-id"
 
@@ -190,6 +192,11 @@ iso() {
   cp "$HERE/iso/grub.cfg" "$stage/boot/grub/grub.cfg"
   sed -i "s/@VERSION@/$VERSION/g" "$stage/boot/grub/grub.cfg"
   [ -f "$HERE/iso/background.png" ] && cp "$HERE/iso/background.png" "$stage/boot/grub/"
+  # GRUB modules and font for the themed menu (gfxterm, png background).
+  mkdir -p "$stage/boot/grub/x86_64-efi" "$stage/boot/grub/fonts"
+  cp "$ROOT"/usr/lib/grub/x86_64-efi/*.mod "$ROOT"/usr/lib/grub/x86_64-efi/*.lst "$stage/boot/grub/x86_64-efi/" 2>/dev/null \
+    || cp /usr/lib/grub/x86_64-efi/*.mod /usr/lib/grub/x86_64-efi/*.lst "$stage/boot/grub/x86_64-efi/"
+  cp "$ROOT/usr/share/grub/unicode.pf2" "$stage/boot/grub/fonts/" 2>/dev/null || cp /usr/share/grub/unicode.pf2 "$stage/boot/grub/fonts/"
 
   log "UEFI boot (signed shim + GRUB) and BIOS boot"
   cp "$ROOT/usr/lib/shim/shimx64.efi.signed.latest" "$stage/EFI/BOOT/BOOTx64.EFI" 2>/dev/null \

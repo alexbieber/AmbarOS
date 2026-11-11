@@ -90,7 +90,9 @@ def test_krunner_and_autostart_entries():
     assert 'ambar-krunner = "ambar_center.krunner:main"' in pyproject
     assert svc["Exec"] == "/usr/bin/ambar-krunner"
     a = DESKTOP / "share" / "autostart" / "os.ambar.Welcome.desktop"
-    assert ini(a)["Desktop Entry"]["Exec"] == "ambar-center --welcome"
+    welcome = ini(a)["Desktop Entry"]["Exec"]
+    assert "exec ambar-center --welcome" in welcome
+    assert "boot=casper" in welcome, "the Welcome must not cover the installer on the live USB"
     if shutil.which("desktop-file-validate"):
         r = subprocess.run(["desktop-file-validate", str(a)], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout

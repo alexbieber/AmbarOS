@@ -1,11 +1,41 @@
 #!/bin/bash
-# Calamares: Ambar branding, and the installer launcher named for Ambar.
+# Calamares: Ambar branding and names, and a launcher that works on Wayland.
 set -euo pipefail
 S=/etc/calamares/settings.conf
 [ -f "$S" ] || { echo "calamares settings.conf missing" >&2; exit 1; }
 sed -i -E 's/^branding:.*/branding: ambar/' "$S"
 grep -q '^branding: ambar' "$S"
+
+M=/etc/calamares/modules
+# Partition and OEM names, links.
+sed -i 's/"kubuntu_boot"/"ambar_boot"/; s/"kubuntu_2604"/"ambar_root"/' "$M/partition.conf"
+sed -i -E 's/^batch-identifier:.*/batch-identifier: ambar-${DATE}/' "$M/oemid.conf"
+sed -i -E 's/^showDonateUrl:.*/showDonateUrl: false/' "$M/welcome.conf"
+! grep -rq "kubuntu_2604\|kubuntu_boot" "$M/partition.conf"
+
+# sudo resets the environment, so the installer would lose the desktop's
+# display (Wayland or X) and fail to open. Pass exactly what it needs.
+cat > /usr/bin/ambar-installer <<'SH'
+#!/bin/sh
+# Starts the Ambar OS installer (Calamares) as root on the current desktop.
+exec sudo /usr/bin/env \
+  WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
+  DISPLAY="${DISPLAY:-}" XAUTHORITY="${XAUTHORITY:-}" \
+  QT_QPA_PLATFORM="${WAYLAND_DISPLAY:+wayland}" \
+  /usr/bin/calamares-launch-normal "$@"
+SH
+chmod 0755 /usr/bin/ambar-installer
+# The launcher script opens links as Kubuntu's live user; use Ambar's.
+sed -i "s/^export BROWSER=.*/export BROWSER='sudo -H -u ambar xdg-open'/" /usr/bin/calamares-launch-normal
+
 for f in /usr/share/applications/*calamares*.desktop /usr/share/applications/*install*.desktop; do
   [ -f "$f" ] || continue
   sed -i -E 's/^Name(\[[^]]*\])?=.*/Name\1=Install Ambar OS/; s/^Icon=.*/Icon=ambar-logo/' "$f"
+  sed -i -E 's#^Exec=sudo /usr/bin/calamares-launch-normal.*#Exec=ambar-installer#' "$f"
+  # One installer in Launchpad: hide the others (calamares.desktop uses "sudo -E",
+  # which sudo-rs rejects; the OEM launcher is for factory installs).
+  if ! grep -q '^Exec=ambar-installer' "$f" && ! grep -q '^NoDisplay=true' "$f"; then
+    sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$f"
+  fi
 done
+grep -q '^Exec=ambar-installer' /usr/share/applications/kubuntu-calamares.desktop

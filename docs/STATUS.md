@@ -4,39 +4,57 @@ _Last updated: 2026-11-11_
 
 ## Summary
 
-The full Ambar software stack is built and tested on Linux:
-- automation engine and `ambard` background service
-- live approvals
-- AI builder
-- agent runtime
-- Automation Center with first-run Welcome
-- KRunner search
-- Plasma theme
-- SDK, packages and marketplace
+**Ambar OS is a complete desktop operating system**, built and booted in this project:
 
-The bootable OS images are **written but have never been built or booted**:
+- **Base:** Ubuntu 26.04 LTS, Linux 7.0 and KDE Plasma 6.6 on Wayland, with a macOS-style shell.
+- **Apps:** the full everyday set, plus every common way to install more.
+- **Installer:** the Ambar installer.
+- **Ambar automation layer** on top.
 
-- x86_64 and ARM64 install images
-- a live USB with a built-in installer
-- a Raspberry Pi 4/400 image
+**Proven in a virtual machine (QEMU, UEFI, no 3D acceleration):**
 
-User documentation is a site built from `docs/`. There's a hardware report tool and contribution guides. That needs a machine with Fedora registry access and KVM: the `os-image` CI job, which runs on GitHub as soon as the repo is pushed, or a Linux PC.
+- The ISO (`ambar-os-0.2-amd64.iso`, 3.6 GB) is built from scratch by `os/ubuntu/build.sh`.
+- It boots through GRUB and the Ambar boot menu, and the live user is logged straight into a **Plasma Wayland session** with the Ambar desktop:
+    - the menu bar with the Ambar menu, the app name, app menus and Control Center
+    - the Dock with Launchpad and Trash
+    - the Ambar wallpaper and theme
+- Search (Alt+Space) finds apps, and opening Files puts its menus in the menu bar, as on macOS.
+- `ambard` runs as a systemd user service. The Welcome shows "Service running".
+- The Control Center reads the real Wi-Fi, volume and display brightness.
+- All 27 checked apps are installed. These include the browser, Files, Terminal, LibreOffice, mail and calendar, media apps, System Settings, the Ambar Store, Flatpak, Snap, Wine and Timeshift.
+- **The installer runs**, with Ambar branding throughout. It took a 40 GB disk through Location, Keyboard, Erase disk (GPT, EFI + ext4) and a user account, then installed. **The full install completes:** all 43 installer steps, ending at *All done. Ambar OS 0.2 has been installed on your computer.*
+- **The installed system starts on its own** (no ISO): UEFI boot, the Ambar login screen with the user created in the installer, password login, the Ambar service and the Welcome. `/etc/os-release` and the console say *Ambar OS 0.2 (based on Ubuntu 26.04.1 LTS)*.
+- ⚠ **Open problem:** on the installed system under emulation (2 CPUs, software rendering), the wallpaper, menu bar and Dock were not drawn within 17 minutes. Plasma has created them (both panels and their widgets are loaded), but they never appear on screen, while the live session draws them in about 8 minutes. Next step: repeat on KVM (the CI workflow) or real hardware to tell a slow-emulation problem from a real bug.
 
-**What is proven and what isn't:**
-- **Proven:** the software, by 186 automated tests and ~30,000 property-test cases.
-- **Not proven:** that the OS boots on any machine. The CI boot test is written to prove it: login, service, marketplace, a real workflow run, Plasma, Welcome and KRunner, plus a desktop screenshot.
+**Found by booting it, and fixed in the recipe:**
 
-| Phase | What | Status |
-|---|---|---|
-| 1–2 | Automation engine, CLI | ✅ built and tested |
-| 3 | `ambard` service, authenticated IPC, **live approvals** | ✅ built and tested |
-| 4 | AI automation builder (Claude / OpenAI-compatible / Ollama) | ✅ tested against mock APIs · ⚠ never called a real model |
-| 5 | Automation Center, **Welcome setup**, **KRunner search**, Plasma theme | ✅ app tested offscreen with screenshots, KRunner on a real D-Bus bus · ⚠ never loaded in a real Plasma session |
-| 6 | Agent identities, scopes, proposals, memory, rate limits | ✅ built and tested |
-| 7 | Python SDK, signed packages, marketplace, developer guide | ✅ built and tested |
-| 8 | Bootable image (bootc, Fedora 45 Kinoite), installer ISO, signed updates, rollback | ⚠ written and statically checked · ❌ **not built or booted** |
-| 8+ | **Live USB** with installer, **ARM64** + **Raspberry Pi** images, `ambar-hwreport`, hardware list | ✅ installer safety rules, hardware report and recipes tested · ❌ **not built or booted** |
-| — | Docs site (MkDocs, strict), contributing, code of conduct, security policy, issue forms | ✅ site builds strict; every documented `ambar` command and flag checked against the real CLI |
+- **Black screen in the VM:** QEMU's emulated `-cpu max` crashed Mesa's software renderer. The test now emulates a plain x86-64-v2 CPU.
+- **Installer wouldn't open:** `sudo` dropped the display variables. `ambar-installer` now passes them through, and the X11 fallback library is installed.
+- **Search timed out on slow machines:** KRunner now gets a longer start-up timeout.
+- **GRUB's themed menu** was missing its modules and font.
+- **Kubuntu names** remained in the installer: partition labels, donate link and OEM ID.
+- **Installer steps from Kubuntu that broke on Ambar:** the bootloader step copied a file we don't ship, the mirror step deleted one, and the package step failed on a Kubuntu package that isn't installed. All three are fixed with Ambar versions of those steps.
+- **Live USB:** the Welcome opened over the installer, and Launchpad showed a second, broken installer icon.
+- **File handlers:** `.exe` files had no handler, and `.deb` files now open in the Ambar Store first.
+
+**Not proven yet:**
+
+- **Real hardware:** no physical PC has run it.
+- **Firefox:** builds here use Falkon. CI adds Firefox from Mozilla's repository.
+- **Flathub:** it's added on first boot with internet, and wasn't reachable from this workspace.
+- **A real AI model:** none has been called yet.
+- **macOS:** the Ambar CLI hasn't been run on macOS.
+
+| Area | Status |
+|---|---|
+| Automation engine, `ambard`, approvals, agents, SDK, packages | ✅ built and tested (131 Rust tests, ~30,000 property cases) |
+| AI automation builder | ✅ tested against mock APIs · ⚠ never called a real model |
+| **Ambar OS ISO** (Ubuntu 26.04 + Plasma 6) | ✅ built here · ✅ boots to the Ambar desktop in QEMU (Wayland) · ⚠ not on real hardware |
+| **macOS-style shell:** menu bar, Ambar menu, app name, global menus, Control Center, Dock, Launchpad, search, Mission Control, traffic-light windows, light/dark | ✅ seen working in the built desktop and the booted ISO · ⚠ gestures untested (no touchpad) |
+| Apps and install-anything (Store, `.deb`, Flatpak, Snap, AppImage, Wine) | ✅ installed and launch · ⚠ Flathub needs internet on first boot |
+| Installer (Calamares, Ambar branding) | ✅ full install in QEMU (Erase disk, 43/43 steps) · ✅ installed system boots to login and logs in · ⚠ installed desktop not drawn under emulation, under investigation |
+| Atomic edition (Fedora Kinoite, bootc, ARM64, Raspberry Pi) | ⚠ experimental: recipe written, built only in CI |
+| Docs site, community files | ✅ strict build; documented commands checked against the real CLI |
 
 ## Test results (2026-11-11, Ubuntu 24.04 container)
 
@@ -48,9 +66,11 @@ User documentation is a site built from `docs/`. There's a hardware report tool 
 | KRunner runner: matching + real D-Bus session bus | 2 |
 | Plasma theme, desktop entries, KRunner/autostart registration, brand logo assets | 10 |
 | OS recipe: COPY sources, configs, systemd unit, shellcheck, branding, boot smoke harness (pass and fail) | 8 |
-| Live USB, installer, ARM64/Pi, hardware report | 16 |
+| Live USB, installer, ARM64/Pi, hardware report (atomic edition) | 16 |
+| Ambar OS (Ubuntu): package lists, build hooks, identity, installer steps, boot harness, desktop shell layout and decorations | 22 |
+| Control Center backend with stand-in system tools | 5 |
 | Docs: strict site build, nav completeness, documented commands/flags exist, community files, README links and media | 6 |
-| **Total** | **186**, 3 consecutive full runs, all green |
+| **Total** | **213** (131 Rust + 82 Python). 14 full Python runs: 13 green, 1 run had one failure that took 25 s instead of 10 s and didn't reproduce in 11 retries, so a timing-sensitive test is suspected |
 
 Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `cargo audit`, `shellcheck`, `desktop-file-validate`, `systemd-analyze verify`, WCAG AA contrast.
 
@@ -87,17 +107,14 @@ Also clean: `cargo fmt`, `cargo clippy -D warnings`, `cargo doc` (0 warnings), `
 
 ## Not verified — do not treat as done
 
-1. **The OS images have never been built or booted.** This includes the live ISO, ARM64 and Raspberry Pi images. Specific risks:
-   - The live ISO uses the newer `image-builder generic-iso` path, which is new upstream.
-   - The Pi boot files are copied by our own script.
-   - The live installer has never written a real disk.
-   - ARM64 boot tests run emulated, and check the CLI only.
-
-   The rest of this item applies to all of them. This environment had no access to Fedora's registries and no KVM or QEMU. The first real build, disk image and boot are in `.github/workflows/os-image.yml`. Push to GitHub and check that job.
+1. **The OS image on real hardware.** The Ambar OS ISO is built and boot-tested only in QEMU under software emulation (no KVM here). Still open:
+   - the **installed desktop** isn't drawn under emulation (see the summary above); it needs a run on KVM or real hardware
+   - Secure Boot with a real firmware, Wi-Fi, sleep, and NVIDIA graphics
+   - the experimental atomic edition (Fedora Kinoite) is still built only in CI
 2. **macOS:** nothing has run on macOS (FSEvents, launchd, `osascript`, peer credentials). Run `bash scripts/verify.sh` on the Mac.
 3. **Real LLMs:** the AI builder was never called against a real model. Only mock servers that copy each API's request and response shape. Prompt quality with real models is unmeasured.
-4. **Real Plasma:** the Plasma look-and-feel, panel layout script, colour schemes and SDDM background were never loaded in a Plasma session. They are only syntax- and schema-checked.
-5. **Login and boot:** `ambar service install` (launchd/systemd enable at login) was never run against a real session manager.
+4. **Plasma on the installed system:** the look-and-feel, layout, colour schemes, SDDM theme and Control Center run in the live session, and the login screen and Welcome run on the installed system, but the installed desktop's panels weren't drawn under emulation.
+5. **Login and boot:** on Linux, `ambard` starts at login from the global systemd user unit, both in the live session and on the installed system. On macOS, `ambar service install` (launchd) was never run.
 6. **Hardware:** no physical hardware has been tested.
 7. **Security review:** this is not a security audit. The parsers are property-tested, and CI signs images, but these are still needed:
    - coverage-guided fuzzing (cargo-fuzz)

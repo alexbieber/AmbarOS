@@ -2,7 +2,8 @@
 Type=Application
 Name=Welcome to Ambar
 Comment=First-run setup for Ambar
-Exec=ambar-center --welcome
+# Not in the live USB session: there the installer is the first thing people need.
+Exec=sh -c "grep -qw boot=casper /proc/cmdline || exec ambar-center --welcome"
 Icon=os.ambar.AutomationCenter
 Terminal=false
 NoDisplay=true

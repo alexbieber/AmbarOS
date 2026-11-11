@@ -94,6 +94,8 @@ class Serial:
             raise SystemExit(f"cannot connect to serial socket {path}")
         self.sock.settimeout(1)
         self.buf = ""
+        self.buf_base = ""
+        self.raw = ""
         self.log = open(log, "w") if log else None
 
     def read_until(self, pattern, timeout):
@@ -103,6 +105,7 @@ class Serial:
             m = rx.search(self.buf)
             if m:
                 out, self.buf = self.buf[: m.end()], self.buf[m.end():]
+                self.buf_base, self.raw = self.buf, ""
                 return out
             try:
                 chunk = self.sock.recv(4096).decode(errors="replace")
@@ -113,7 +116,9 @@ class Serial:
             if self.log:
                 self.log.write(chunk)
                 self.log.flush()
-            self.buf += clean(chunk)
+            self.raw += chunk
+            # Clean the whole tail, so escape sequences split across reads are removed too.
+            self.buf = self.buf_base + clean(self.raw)
         raise TimeoutError(f"timed out waiting for {pattern!r}; last output:\n{self.buf[-800:]}")
 
     def send(self, text):
