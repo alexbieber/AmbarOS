@@ -17,6 +17,11 @@ cp -r plasma/look-and-feel/os.ambar.desktop plasma/look-and-feel/os.ambar.deskto
 cp -r plasma/wallpapers/Ambar "$DATA/wallpapers/"
 cp share/icons/hicolor/scalable/apps/*.svg "$DATA/icons/hicolor/scalable/apps/"
 cp share/applications/*.desktop "$DATA/applications/"
+install -d "$DATA/krunner/dbusplugins" "$DATA/dbus-1/services" "${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+cp share/krunner/dbusplugins/*.desktop "$DATA/krunner/dbusplugins/"
+sed "s|^Exec=.*|Exec=$HOME/.local/bin/ambar-krunner|" share/dbus-1/services/os.ambar.KRunner.service \
+  > "$DATA/dbus-1/services/os.ambar.KRunner.service"
+cp share/autostart/os.ambar.Welcome.desktop "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/"
 
 python3 -m pip install --user --quiet ../sdk/python ./automation-center \
   || echo "note: install the app with pipx or a venv if your Python is externally managed"

@@ -243,3 +243,48 @@ def test_disconnected_state(tmp_path):
     b = Backend(tmp_path / "none", poll_ms=0)
     assert not b.connected
     assert "isn't running" in b.error
+
+
+def test_welcome_setup_flow(ui, world, tmp_path, monkeypatch):
+    app, win, backend, warnings, tmp = ui
+    market = ROOT / "marketplace" / "index.json"
+    monkeypatch.setenv("AMBAR_MARKETPLACE", str(market))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    monkeypatch.setenv("AMBAR_CONFIG_DIR", str(tmp_path / "cfg" / "ambar"))
+    monkeypatch.setenv("AMBAR_AI_CONFIG", str(tmp_path / "cfg" / "ambar" / "ai.toml"))
+    from ambar_center.backend import welcome_done
+    backend._ambar = str(BIN / "ambar")
+    backend.refresh()
+    packs = backend.starterPacks
+    assert {p["name"] for p in packs} == {"dev.ambar.daily-notes", "dev.ambar.screenshot-sorter",
+                                         "dev.ambar.tidy-downloads"}
+    for theme in ["light", "dark"]:
+        win.setProperty("themeOverride", theme)
+        win.setProperty("page", "welcome")
+        shot(app, win, f"{theme}-welcome")
+    preview = backend.packPreview("dev.ambar.daily-notes")
+    assert "signature  valid" in preview and "Documents/Notes" in preview, preview
+
+    done = []
+    backend.toast.connect(lambda k, m: done.append((k, m)))
+    backend.installPack("dev.ambar.daily-notes")
+    deadline = time.time() + 30
+    while not done and time.time() < deadline:
+        pump(app, 0.1)
+    assert done and done[-1][0] == "ok", done
+    assert any(p["installed"] for p in backend.starterPacks if p["name"] == "dev.ambar.daily-notes")
+    with Client(world[1]) as c:
+        assert any(w["id"] == "daily-note" and w["state"] == "active" for w in c.list_workflows())
+
+    done.clear()
+    backend.configureAi("ollama", "llama3.2", "")
+    deadline = time.time() + 30
+    while not done and time.time() < deadline:
+        pump(app, 0.1)
+    assert done and done[-1][0] == "ok", done
+    assert 'provider = "ollama"' in (tmp_path / "cfg" / "ambar" / "ai.toml").read_text()
+
+    assert not welcome_done()
+    backend.finishWelcome()
+    assert welcome_done()
+    assert not warnings, warnings

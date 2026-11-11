@@ -42,7 +42,7 @@ LABEL org.opencontainers.image.title="Ambar OS" \
       containers.bootc=1
 
 # Runtime dependencies of the Automation Center.
-RUN dnf -y install --setopt=install_weak_deps=False python3-pyside6 && dnf clean all
+RUN dnf -y install --setopt=install_weak_deps=False python3-pyside6 python3-jeepney && dnf clean all
 
 # Ambar software.
 COPY --from=build /out/usr /usr
@@ -53,6 +53,10 @@ COPY desktop/plasma/look-and-feel/ /usr/share/plasma/look-and-feel/
 COPY desktop/plasma/wallpapers/Ambar/ /usr/share/wallpapers/Ambar/
 COPY desktop/share/icons/ /usr/share/icons/
 COPY desktop/share/applications/ /usr/share/applications/
+# KRunner (Alt+Space) integration and first-login Welcome.
+COPY desktop/share/krunner/ /usr/share/krunner/
+COPY desktop/share/dbus-1/ /usr/share/dbus-1/
+COPY desktop/share/autostart/ /etc/xdg/autostart/
 
 # Marketplace shipped with the OS (publishers still need to be trusted explicitly).
 COPY marketplace/index.json /usr/share/ambar/marketplace/index.json
@@ -69,6 +73,7 @@ RUN /tmp/branding.sh "$(realpath /usr/lib/os-release)" "${FEDORA_VERSION}" && rm
 # Enable ambard for every user session (systemd user preset), and sanity-check.
 RUN systemctl --global preset ambard.service \
     && test -x /usr/bin/ambard && /usr/bin/ambar --version \
-    && python3 -c "import ambar_center, ambar_sdk, PySide6"
+    && test -x /usr/bin/ambar-krunner && test -x /usr/bin/ambar-center \
+    && python3 -c "import ambar_center, ambar_center.krunner, ambar_sdk, jeepney, PySide6"
 
 RUN bootc container lint

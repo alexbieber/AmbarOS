@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Ambar
+Comment=First-run setup for Ambar
+Exec=ambar-center --welcome
+Icon=os.ambar.AutomationCenter
+Terminal=false
+NoDisplay=true
+X-KDE-autostart-phase=2
+X-GNOME-Autostart-enabled=true

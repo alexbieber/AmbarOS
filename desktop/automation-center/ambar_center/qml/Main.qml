@@ -17,6 +17,9 @@ ApplicationWindow {
                         || (themeOverride === "" && Qt.styleHints.colorScheme === Qt.ColorScheme.Dark)
     property string page: initialPage
     property var draft: null
+    property string askText: ""
+    property string previewText: ""
+    property string previewName: ""
 
     QtObject {
         id: t
@@ -240,7 +243,8 @@ ApplicationWindow {
                         { key: "automations", label: "Automations" },
                         { key: "proposals", label: "Proposals" },
                         { key: "agents", label: "Agents" },
-                        { key: "activity", label: "Activity" }
+                        { key: "activity", label: "Activity" },
+                        { key: "welcome", label: "Setup" }
                     ]
                     delegate: Rectangle {
                         id: nav
@@ -336,7 +340,7 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.centerIn: parent
                 width: Math.min(440, parent.width - 64)
-                visible: !backend.connected
+                visible: !backend.connected && win.page !== "welcome"
                 spacing: 12
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
@@ -360,7 +364,7 @@ ApplicationWindow {
                 anchors.margins: 32
                 anchors.topMargin: 28
                 spacing: 20
-                visible: backend.connected
+                visible: backend.connected || win.page === "welcome"
 
                 // Header
                 RowLayout {
@@ -369,7 +373,7 @@ ApplicationWindow {
                         spacing: 2
                         Text {
                             text: ({ overview: "Overview", automations: "Automations", proposals: "Proposals",
-                                     agents: "Agents", activity: "Activity" })[win.page]
+                                     agents: "Agents", activity: "Activity", welcome: "Welcome to Ambar" })[win.page]
                             color: t.text
                             font.pixelSize: 26
                             font.weight: Font.DemiBold
@@ -379,7 +383,8 @@ ApplicationWindow {
                                      automations: "Everything Ambar runs for you. Nothing runs without the permissions you approved.",
                                      proposals: "Automations your agents suggested. They do nothing until you approve them.",
                                      agents: "Assistants that can talk to Ambar, and exactly what each one may do.",
-                                     activity: "Every run, with its outcome." })[win.page]
+                                     activity: "Every run, with its outcome.",
+                                     welcome: "A few choices and your computer starts working for you." })[win.page]
                         }
                     }
                     Item { Layout.fillWidth: true }
@@ -389,7 +394,7 @@ ApplicationWindow {
                 StackLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    currentIndex: ["overview", "automations", "proposals", "agents", "activity"].indexOf(win.page)
+                    currentIndex: ["overview", "automations", "proposals", "agents", "activity", "welcome"].indexOf(win.page)
 
                     // ---------------------------------------------- Overview
                     ScrollView {
@@ -450,6 +455,7 @@ ApplicationWindow {
                                             anchors.margins: 4
                                             wrapMode: TextArea.Wrap
                                             color: t.text
+                                            text: win.askText
                                             placeholderText: "e.g. When a PDF lands in Downloads, move it to Documents/PDFs and let me know"
                                             placeholderTextColor: t.muted
                                             background: null
@@ -767,6 +773,227 @@ ApplicationWindow {
                             }
                         }
                     }
+
+                    // ---------------------------------------------- Welcome / setup
+                    ScrollView {
+                        contentWidth: availableWidth
+                        clip: true
+                        ColumnLayout {
+                            width: parent.width
+                            spacing: 14
+
+                            component Step: Card {
+                                property int number
+                                property string heading
+                                property string detail
+                                property bool done: false
+                                default property alias content: stepBody.data
+                                Layout.fillWidth: true
+                                implicitHeight: stepCol.implicitHeight + 40
+                                ColumnLayout {
+                                    id: stepCol
+                                    anchors.fill: parent
+                                    anchors.margins: 20
+                                    spacing: 12
+                                    RowLayout {
+                                        spacing: 12
+                                        Rectangle {
+                                            width: 28; height: 28; radius: 14
+                                            color: done ? t.good : t.accentSoft
+                                            Text { anchors.centerIn: parent; text: done ? "✓" : number; color: done ? "white" : t.accent; font.weight: Font.Bold }
+                                        }
+                                        ColumnLayout {
+                                            spacing: 1
+                                            Layout.fillWidth: true
+                                            Label2 { text: heading; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                            Muted { text: detail; Layout.fillWidth: true }
+                                        }
+                                    }
+                                    ColumnLayout { id: stepBody; Layout.fillWidth: true; Layout.leftMargin: 40; spacing: 10 }
+                                }
+                            }
+
+                            Step {
+                                number: 1
+                                done: backend.connected
+                                heading: "Automation service"
+                                detail: backend.connected ? "Running. Your automations keep working in the background, even with this window closed."
+                                                          : "Ambar runs automations in a background service. Start it to continue."
+                                Btn {
+                                    visible: !backend.connected
+                                    primary: true
+                                    text: backend.busy ? "Starting…" : "Start service"
+                                    enabled: !backend.busy
+                                    onClicked: backend.startService()
+                                }
+                            }
+
+                            Step {
+                                number: 2
+                                heading: "Appearance"
+                                detail: "Applies to the whole desktop. You can change it any time in System Settings."
+                                RowLayout {
+                                    spacing: 12
+                                    Repeater {
+                                        model: [ { mode: "light", label: "Light", bg: "#F7F4EF", fg: "#1F1A15" },
+                                                 { mode: "dark", label: "Dark", bg: "#15120F", fg: "#F4EEE6" } ]
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            property bool chosen: (modelData.mode === "dark") === win.dark
+                                            width: 150; height: 92; radius: 12
+                                            color: modelData.bg
+                                            border.width: chosen ? 2 : 1
+                                            border.color: chosen ? t.accent : t.border
+                                            Rectangle { x: 12; y: 12; width: 40; height: 8; radius: 4; color: t.accent }
+                                            Rectangle { x: 12; y: 28; width: 110; height: 6; radius: 3; color: modelData.fg; opacity: 0.25 }
+                                            Rectangle { x: 12; y: 40; width: 80; height: 6; radius: 3; color: modelData.fg; opacity: 0.25 }
+                                            Text { x: 12; y: 64; text: modelData.label; color: modelData.fg; font.weight: Font.DemiBold }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: { win.themeOverride = parent.modelData.mode; backend.setAppearance(parent.modelData.mode) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Step {
+                                number: 3
+                                heading: "AI assistant (optional)"
+                                detail: "Lets you describe automations in plain words. A local model keeps everything on this computer. Drafts never run until you approve them."
+                                RowLayout {
+                                    spacing: 10
+                                    Layout.fillWidth: true
+                                    ComboBox {
+                                        id: provider
+                                        objectName: "aiProvider"
+                                        model: ["Claude (Anthropic)", "OpenAI-compatible", "Local model (Ollama)"]
+                                        implicitWidth: 220
+                                        implicitHeight: 36
+                                        background: Rectangle {
+                                            radius: 8
+                                            color: t.surface2
+                                            border.color: provider.activeFocus || provider.popup.visible ? t.accent : t.border
+                                        }
+                                        contentItem: Text {
+                                            leftPadding: 12
+                                            rightPadding: 28
+                                            text: provider.displayText
+                                            color: t.text
+                                            font.pixelSize: 14
+                                            verticalAlignment: Text.AlignVCenter
+                                            elide: Text.ElideRight
+                                        }
+                                        indicator: Text {
+                                            x: provider.width - width - 12
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "▾"
+                                            color: t.muted
+                                            font.pixelSize: 14
+                                        }
+                                        delegate: ItemDelegate {
+                                            id: opt
+                                            required property string modelData
+                                            required property int index
+                                            width: provider.width - 8
+                                            highlighted: provider.highlightedIndex === index
+                                            contentItem: Text { text: opt.modelData; color: t.text; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { radius: 6; color: opt.highlighted ? t.accentSoft : "transparent" }
+                                        }
+                                        popup: Popup {
+                                            y: provider.height + 4
+                                            width: provider.width
+                                            padding: 4
+                                            implicitHeight: contentItem.implicitHeight + 8
+                                            background: Rectangle { color: t.surface; radius: 8; border.color: t.border }
+                                            contentItem: ListView {
+                                                implicitHeight: contentHeight
+                                                model: provider.popup.visible ? provider.delegateModel : null
+                                                clip: true
+                                            }
+                                        }
+                                    }
+                                    TextField {
+                                        id: modelField
+                                        implicitHeight: 36
+                                        placeholderText: provider.currentIndex === 0 ? "model (default: claude-sonnet-5-5)" : "model, e.g. llama3.2"
+                                        color: t.text
+                                        placeholderTextColor: t.muted
+                                        Layout.fillWidth: true
+                                        background: Rectangle { radius: 8; color: t.surface2; border.color: modelField.activeFocus ? t.accent : t.border }
+                                    }
+                                }
+                                RowLayout {
+                                    spacing: 10
+                                    Layout.fillWidth: true
+                                    visible: provider.currentIndex !== 2
+                                    TextField {
+                                        id: keyField
+                                        implicitHeight: 36
+                                        placeholderText: "API key (stored privately on this computer)"
+                                        echoMode: TextInput.Password
+                                        color: t.text
+                                        placeholderTextColor: t.muted
+                                        Layout.fillWidth: true
+                                        background: Rectangle { radius: 8; color: t.surface2; border.color: keyField.activeFocus ? t.accent : t.border }
+                                    }
+                                }
+                                Btn {
+                                    text: "Save AI settings"
+                                    enabled: !backend.busy && (provider.currentIndex !== 2 || modelField.text.length > 0)
+                                    onClicked: {
+                                        backend.configureAi(["anthropic", "openai", "ollama"][provider.currentIndex], modelField.text, keyField.text)
+                                        keyField.text = ""
+                                    }
+                                }
+                            }
+
+                            Step {
+                                number: 4
+                                heading: "Starter automations"
+                                detail: "Ready-made, signed automations. You'll see exactly what each one can access before it's installed."
+                                Muted { visible: backend.starterPacks.length === 0; text: "No marketplace is configured on this computer." }
+                                Repeater {
+                                    model: backend.starterPacks
+                                    delegate: RowLayout {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        spacing: 12
+                                        ColumnLayout {
+                                            spacing: 1
+                                            Layout.fillWidth: true
+                                            Label2 { text: modelData.description; font.weight: Font.Medium; Layout.fillWidth: true }
+                                            Muted { text: modelData.name + " · by " + modelData.author }
+                                        }
+                                        Pill { visible: modelData.installed; label: "Installed"; tone: t.good }
+                                        Btn {
+                                            visible: !modelData.installed
+                                            text: "Review & install"
+                                            enabled: backend.connected && !backend.busy
+                                            onClicked: {
+                                                win.previewName = modelData.name
+                                                win.previewText = backend.packPreview(modelData.name)
+                                                packPopup.open()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Item { Layout.fillWidth: true }
+                                Btn {
+                                    objectName: "finishWelcome"
+                                    primary: true
+                                    text: "Start using Ambar"
+                                    onClicked: { backend.finishWelcome(); win.page = "overview" }
+                                }
+                            }
+                            Item { implicitHeight: 8 }
+                        }
+                    }
                 }
             }
         }
@@ -859,6 +1086,47 @@ ApplicationWindow {
                     text: "Grant & enable"
                     enabled: !(win.draft && win.draft.high) || draftAck.checked
                     onClicked: { backend.addDraft(draftEdit.text, true); draftPopup.close(); win.page = "automations" }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: packPopup
+        objectName: "packPopup"
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(680, win.width - 80)
+        height: Math.min(600, win.height - 60)
+        padding: 0
+        background: Rectangle { color: t.surface; radius: 16; border.color: t.border }
+        Overlay.modal: Rectangle { color: win.dark ? "#99000000" : "#55201810" }
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 12
+            Label2 { text: "Review " + win.previewName; font.pixelSize: 20; font.weight: Font.DemiBold }
+            Muted { text: "Installing trusts this publisher's signing key and grants the permissions listed below."; Layout.fillWidth: true }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: 10
+                color: t.surface2
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    Text { text: win.previewText; color: t.text; font.family: "monospace"; font.pixelSize: 12 }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Btn { text: "Cancel"; onClicked: packPopup.close() }
+                Btn {
+                    primary: true
+                    text: "Trust & install"
+                    enabled: win.previewText.indexOf("signature  valid") >= 0
+                    onClicked: { backend.installPack(win.previewName); packPopup.close() }
                 }
             }
         }

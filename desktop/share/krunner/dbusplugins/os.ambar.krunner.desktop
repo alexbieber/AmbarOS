@@ -1,0 +1,17 @@
+[Desktop Entry]
+Name=Ambar Automations
+Comment=Run your automations and create new ones from KRunner
+Type=Service
+Icon=os.ambar.AutomationCenter
+X-KDE-ServiceTypes=Plasma/Runner
+X-KDE-PluginInfo-Author=Ambar Singh
+X-KDE-PluginInfo-Name=os.ambar.krunner
+X-KDE-PluginInfo-Version=0.1.0
+X-KDE-PluginInfo-License=Apache-2.0
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-API-Minimum-Version=2.0
+X-Plasma-DBusRunner-Service=os.ambar.KRunner
+X-Plasma-DBusRunner-Path=/runner
+X-Plasma-Request-Actions-Once=true
+X-Plasma-Runner-Min-Letter-Count=2

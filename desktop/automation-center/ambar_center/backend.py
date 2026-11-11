@@ -22,6 +22,31 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from ambar_sdk import AmbarError, Client, NotRunning, default_data_dir
 
 
+def _config_dir() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base) / "ambar"
+
+
+def welcome_done() -> bool:
+    """Whether first-run setup was completed (or skipped) for this user."""
+    return (_config_dir() / "welcome-done").exists()
+
+
+def marketplace_index() -> Optional[str]:
+    """The marketplace index configured for this user, else the system one."""
+    if os.environ.get("AMBAR_MARKETPLACE"):
+        return os.environ["AMBAR_MARKETPLACE"]
+    for f in (_config_dir() / "marketplace.toml", Path("/etc/xdg/ambar/marketplace.toml")):
+        try:
+            import tomllib
+            idx = tomllib.loads(f.read_text()).get("index")
+            if idx:
+                return idx
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def _ago(ts: Optional[str]) -> str:
     if not ts:
         return "never"
@@ -232,6 +257,88 @@ class Backend(QObject):
     def approve(self, proposal_id: str, enable: bool) -> None:
         self._do("Approve", lambda c: c.approve(proposal_id, enable=enable),
                  "Approved" + (" and enabled" if enable else ""))
+
+    # ------------------------------------------------------------ first run
+
+    def _cli(self, args: list[str], stdin: Optional[str] = None, timeout: int = 120) -> str:
+        env = {**os.environ, "AMBAR_DATA_DIR": str(self._data_dir)}
+        p = subprocess.run([self._ambar, *args], input=stdin, capture_output=True, text=True,
+                           timeout=timeout, env=env)
+        if p.returncode != 0:
+            lines = (p.stderr or p.stdout).strip().splitlines()
+            raise RuntimeError(lines[-1].removeprefix("Error: ") if lines else "failed")
+        return p.stdout
+
+    @Property("QVariantList", notify=changed)
+    def starterPacks(self) -> list:
+        idx = marketplace_index()
+        if not idx or idx.startswith("http"):
+            return []
+        try:
+            data = json.loads(Path(idx).read_text())
+        except (OSError, ValueError):
+            return []
+        installed = set()
+        reg = self._data_dir / "packages"
+        if reg.is_dir():
+            installed = {f.stem for f in reg.glob("*.json")}
+        return [{**p, "installed": p["name"] in installed} for p in data.get("packages", [])]
+
+    @Slot(str, result=str)
+    def packPreview(self, name: str) -> str:
+        """What a starter pack contains and may access (from the signed package)."""
+        idx = marketplace_index()
+        try:
+            data = json.loads(Path(idx).read_text()) if idx else {}
+            entry = next(p for p in data.get("packages", []) if p["name"] == name)
+            path = Path(idx).parent / entry["url"]
+            return self._cli(["pkg", "verify", str(path)])
+        except (StopIteration, OSError, ValueError, RuntimeError) as e:
+            return f"Could not read {name}: {e}"
+
+    @Slot(str)
+    def installPack(self, name: str) -> None:
+        idx = marketplace_index()
+
+        def work() -> str:
+            return self._cli(["pkg", "install", name, "--index", str(idx), "--trust", "--yes", "--enable"])
+
+        def done(_: Any, err: Optional[BaseException]) -> None:
+            self.toast.emit("error" if err else "ok", str(err) if err else f"Installed {name}")
+            self.refresh()
+
+        self._in_background(f"installing {name}", work, done)
+
+    @Slot(str)
+    def setAppearance(self, mode: str) -> None:
+        """Applies the Ambar look to the whole Plasma desktop (when running Plasma)."""
+        tool = shutil.which("plasma-apply-lookandfeel")
+        if not tool:
+            return
+        pkg = "os.ambar.desktop.dark" if mode == "dark" else "os.ambar.desktop"
+        subprocess.Popen([tool, "--apply", pkg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    @Slot(str, str, str)
+    def configureAi(self, provider: str, model: str, key: str) -> None:
+        def work() -> str:
+            args = ["ai", "config", "--provider", provider]
+            if model.strip():
+                args += ["--model", model.strip()]
+            out = self._cli(args)
+            if key.strip():
+                self._cli(["ai", "set-key"], stdin=key.strip() + "\n")
+            return out
+
+        def done(_: Any, err: Optional[BaseException]) -> None:
+            self.toast.emit("error" if err else "ok", str(err) if err else "AI assistant configured")
+
+        self._in_background("saving AI settings", work, done)
+
+    @Slot()
+    def finishWelcome(self) -> None:
+        d = _config_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "welcome-done").write_text("1\n")
 
     @Slot(str, bool)
     def decideApproval(self, approval_id: str, allow: bool) -> None:

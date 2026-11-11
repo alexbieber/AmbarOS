@@ -76,6 +76,26 @@ def test_wallpaper_package():
         assert f.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_krunner_and_autostart_entries():
+    k = ini(DESKTOP / "share" / "krunner" / "dbusplugins" / "os.ambar.krunner.desktop")["Desktop Entry"]
+    svc = ini(DESKTOP / "share" / "dbus-1" / "services" / "os.ambar.KRunner.service")["D-BUS Service"]
+    assert k["X-Plasma-API"] == "DBus"
+    assert k["X-Plasma-DBusRunner-Service"] == svc["Name"] == "os.ambar.KRunner"
+    assert k["X-Plasma-DBusRunner-Path"] == "/runner"
+    sys.path.insert(0, str(DESKTOP / "automation-center"))
+    sys.path.insert(0, str(DESKTOP.parent / "sdk" / "python"))
+    from ambar_center import krunner
+    assert (krunner.BUS_NAME, krunner.OBJECT_PATH) == (svc["Name"], k["X-Plasma-DBusRunner-Path"])
+    pyproject = (DESKTOP / "automation-center" / "pyproject.toml").read_text()
+    assert 'ambar-krunner = "ambar_center.krunner:main"' in pyproject
+    assert svc["Exec"] == "/usr/bin/ambar-krunner"
+    a = DESKTOP / "share" / "autostart" / "os.ambar.Welcome.desktop"
+    assert ini(a)["Desktop Entry"]["Exec"] == "ambar-center --welcome"
+    if shutil.which("desktop-file-validate"):
+        r = subprocess.run(["desktop-file-validate", str(a)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout
+
+
 def test_desktop_entry():
     f = DESKTOP / "share" / "applications" / "os.ambar.AutomationCenter.desktop"
     cp = ini(f)
