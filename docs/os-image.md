@@ -111,7 +111,7 @@ os/build.sh rpi              # + Raspberry Pi 4/400 SD-card image (on an ARM64 m
 
 Everything builds for the architecture of the machine you build on. CI builds x86_64 and aarch64 on native runners.
 
-The live ISO is made by `image-builder` (`generic-iso`), the successor of bootc-image-builder. The other disk types still use bootc-image-builder, which remains supported. Details: [Try it from a USB stick](live-usb.md).
+The live ISO is made by `image-builder` (`generic-iso`), the successor of bootc-image-builder. The other disk types still use bootc-image-builder, which remains supported. This live ISO is not the Ubuntu image in [Try it from a USB stick](live-usb.md). That page installs `ambar-os-0.2-amd64.iso`.
 
 - **Base image:** change it with `--build-arg BASE_IMAGE=…`. For example, `quay.io/fedora/fedora-bootc:45` plus your own KDE package set.
 - **Fedora version:** change it with `--build-arg FEDORA_VERSION=…`.
@@ -153,13 +153,16 @@ It then publishes `ghcr.io/<owner>/ambar-os` as one signed multi-arch image. The
 
 ## Install
 
-See [Install](install.md) for every route:
+Install the main edition from `ambar-os-0.2-amd64.iso`. The steps are [Try it from a USB stick](live-usb.md) and [Install](install.md).
 
-- the live USB's installer
+The atomic edition is a different image. Its routes are experimental:
+
+- its own live ISO, `ambar-os-live-<arch>.iso` (the live user is `liveuser`; the installer downloads the image and needs the internet)
 - the Anaconda installer ISO
 - `bootc switch` from Fedora Atomic
-- VMs, including UTM on Apple silicon Macs
-- Raspberry Pi
+- a Raspberry Pi image
+
+Those files come from the **OS image** workflow and are kept for 14 days. They are not a substitute for `ambar-os-0.2-amd64.iso`.
 
 ## Updates, rollback and recovery
 
@@ -175,7 +178,7 @@ See [Install](install.md) for every route:
 
 ## Hardware
 
-Ambar OS uses Fedora 45's kernel, firmware and drivers. What has actually been tested, and how to report your machine, is in [Hardware](hardware.md).
+The atomic edition uses Fedora 45's kernel, firmware and drivers. The main edition uses Ubuntu 26.04's. What has actually been tested, and how to report your machine, is in [Hardware](hardware.md).
 
 ## Status and known gaps
 

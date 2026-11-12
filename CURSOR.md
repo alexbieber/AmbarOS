@@ -159,7 +159,7 @@ A failing macOS CI job is expected to need work: nothing has run on macOS yet (s
 
 ## Step 9: The ISO and a release (only when the user asks)
 
-- **Get the ISO:** Actions → the green *Ambar OS ISO* run → Artifacts → `ambar-os-iso`. Artifacts are kept 14 days.
+- **Get the ISO:** Actions → *Ambar OS ISO* → a run whose **standard** job succeeded → Artifacts → `ambar-os-standard-iso`. Unzip `ambar-os-0.2-amd64.iso`. The security image is `ambar-os-security-iso`, only when that job succeeded. Artifacts are kept 14 days. The user install steps are `docs/live-usb.md`.
 - **Release:** a GitHub release file must be under 2 GiB and the ISO is 3.6 GB. Follow `docs/github-setup.md` → *Publish a release*: split the ISO into two parts, or host it on SourceForge. Tag `v0.2.0`, mark it **pre-release**, and use the notes template in that guide.
 
 ## Step 10: Report to the user

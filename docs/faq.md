@@ -14,6 +14,12 @@ Not yet. The Ambar software is built and has an extensive test suite, but the OS
 
 Ubuntu tools such as `apt` keep working, and Ubuntu's security updates apply until 2031. Ambar OS is not affiliated with or endorsed by Canonical or KDE.
 
+### How do I install Ambar OS?
+
+Download `ambar-os-0.2-amd64.iso` from the [Ambar OS ISO workflow](live-usb.md#download-the-iso), unzip it, and write that `.iso` to a USB stick or open it in a virtual machine. The steps are in [Try it from a USB stick](live-usb.md) and [Install](install.md). There is no ISO in the source folder, and GitHub keeps each build for 14 days.
+
+The Security edition is a second ISO, `ambar-os-security-0.2-amd64.iso`, from the same workflow when the security job succeeded. The experimental Fedora image is a different product; its notes are on the [OS image](os-image.md#atomic-edition-experimental) page.
+
 ### How do I install apps?
 
 Almost any way you like: the **Ambar Store**, a `.deb` from a website (double-click it), Flathub, Snap, AppImage, Windows programs through Wine, and `apt` in Terminal. See [Install apps](first-steps.md#install-apps).

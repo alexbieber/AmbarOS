@@ -83,11 +83,14 @@ A ❌ on the first run is normal for a project that has never run on GitHub befo
 
 ## 7. Get the ISO
 
-When **Ambar OS ISO** turns green:
+When the **standard** job of **Ambar OS ISO** succeeds (the whole workflow can still be red if only the security job failed):
 
 1. Open the run and scroll to **Artifacts**.
-2. Download **ambar-os-iso** (the ISO and its `.sha256` file) and **ambar-os-boot-evidence** (serial log and screenshots of the booted desktop).
-3. Artifacts are kept for **14 days**. Run the workflow again any time with **Actions → Ambar OS ISO → Run workflow**.
+2. Download **ambar-os-standard-iso**. Unzip it to get `ambar-os-0.2-amd64.iso` and `ambar-os-0.2-amd64.iso.sha256`. **ambar-os-standard-boot-evidence** is the serial log and screenshots, not the installer.
+3. Download **ambar-os-security-iso** only when the security job succeeded. That zip contains `ambar-os-security-0.2-amd64.iso`.
+4. Artifacts are kept for **14 days**. Run the workflow again any time with **Actions → Ambar OS ISO → Run workflow**.
+
+People installing Ambar OS follow [Try it from a USB stick](live-usb.md). That page is the Ubuntu ISO. The experimental Fedora image is a different workflow and a different file.
 
 Check the download before using it:
 

@@ -17,12 +17,12 @@ hide:
 <p class="ambar-hero__lead">A complete desktop operating system on Ubuntu 26.04 LTS and KDE Plasma 6. It looks and works like macOS, runs the apps you need on day one, and adds safe automations and a full security toolkit.</p>
 
 <div class="ambar-hero__actions" markdown>
-[Try it from a USB stick](live-usb.md){ .md-button .md-button--primary }
+[Download the ISO](live-usb.md#download-the-iso){ .md-button .md-button--primary }
+[Install](install.md){ .md-button }
 [First steps](first-steps.md){ .md-button }
-[View on GitHub :material-github:](https://github.com/alexbieber/AmbarOS){ .md-button }
 </div>
 
-<p class="ambar-hero__meta">Free and open source · Apache-2.0 · Version 0.2</p>
+<p class="ambar-hero__meta">Free and open source · Apache-2.0 · Version 0.2 · This site is the user guide. The repository README is for building from source.</p>
 
 </div>
 
@@ -137,6 +137,8 @@ For security professionals and learners. Everything in Ambar OS, plus Kali's def
 
 </div>
 
+Both files use the same [USB and install steps](live-usb.md). Download the artifact **ambar-os-standard-iso** and unzip `ambar-os-0.2-amd64.iso`. For the Security edition, download **ambar-os-security-iso** only when that job succeeded. Each build is kept for 14 days. The experimental Fedora image is a different download; see [OS images](os-image.md#atomic-edition-experimental).
+
 ## Start here { .ambar-section }
 
 | I want to… | Go to |
@@ -148,6 +150,7 @@ For security professionals and learners. Everything in Ambar OS, plus Kali's def
 | Fix a problem | [Troubleshooting](troubleshooting.md) |
 | Write automations by hand | [Workflow format](workflow-format.md) |
 | Build agents, packages or the OS itself | [Developer guide](developer-guide.md) |
+| Build this repository from source | [GitHub README](https://github.com/alexbieber/AmbarOS#build-from-source) |
 | Help out | [Community](community.md) |
 
 ## See automations in action { .ambar-section }

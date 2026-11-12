@@ -1,5 +1,7 @@
 # Install Ambar OS
 
+Start by [downloading the ISO](live-usb.md#download-the-iso). The file to use is `ambar-os-0.2-amd64.iso`, after you unzip the artifact. This page is what you do with that file.
+
 | You have… | Do this |
 |---|---|
 | A PC you want to use for Ambar (alone or next to Windows) | [From the USB stick](#from-the-usb-stick) |
@@ -30,7 +32,7 @@ The installer copies the system from the stick, so it works offline.
 
 ## Virtual machine
 
-Use the ISO in any virtual machine app:
+Open `ambar-os-0.2-amd64.iso` in any virtual machine app. Use the `.iso` file from the zip, not the zip itself.
 
 - **Windows:** VirtualBox, VMware Workstation, Hyper-V (a Generation 2 VM)
 - **Linux:** GNOME Boxes, virt-manager, or `os/ubuntu/test-qemu.sh <iso> --interactive`
@@ -49,4 +51,6 @@ On a **Mac with Apple silicon**, the current ISO is for Intel/AMD PCs. In UTM it
 
 ## Other editions
 
-`os/` also contains an experimental **atomic edition** built on Fedora Kinoite with bootc. It has image-based updates and rollback, ARM64 and Raspberry Pi images, but it can't install `.deb` apps from websites. Ambar OS above is the main edition. See [OS images](os-image.md).
+**Ambar OS Security** uses this same installer. Download `ambar-os-security-0.2-amd64.iso` only when the security job on the [ISO workflow](https://github.com/alexbieber/AmbarOS/actions/workflows/os-ubuntu.yml) succeeded. See [Download the ISO](live-usb.md#download-the-iso).
+
+The **atomic edition** is a separate experimental image based on Fedora. It is not `ambar-os-0.2-amd64.iso`, and these USB steps do not apply to it. See [OS images](os-image.md#atomic-edition-experimental).

@@ -6,14 +6,14 @@ Find your problem below. Each fix starts with the quickest check. If nothing her
 
 ### The USB stick won't boot
 
-- **Written wrong.** Check the stick was *written* as an image (balenaEtcher, Fedora Media Writer, Rufus in DD mode, or `dd`), not copied as a file.
+- **Written wrong.** Unzip the download first, then write `ambar-os-0.2-amd64.iso` as an image (balenaEtcher, Rufus in DD mode, Fedora Media Writer, or `dd`). Copying the zip onto the stick, or copying the ISO as a normal file, will not boot. See [Write the ISO to the stick](live-usb.md#1-write-the-iso-to-the-stick).
 - **Boot menu.** Choose the entry that starts with **UEFI** in the boot menu.
 - **Secure Boot.** Ambar boots through Ubuntu's signed shim. If the firmware still says *security violation*, turn Secure Boot off in the firmware settings, start Ambar, and report your model.
 - **USB port.** Some machines only boot from USB 2 ports or from the left-hand ports. Try another port.
 
 ### Black or garbled screen after the boot menu
 
-Restart and choose **Try Ambar OS (safe graphics)**. This adds `nomodeset`. If that works, your graphics chip needs a driver fix. Please [send a hardware report](hardware.md#report-your-computer).
+Restart and choose **Try or Install Ambar OS (safe graphics)**. This adds `nomodeset`. If that works, your graphics chip needs a driver fix. Please [send a hardware report](hardware.md#report-your-computer).
 
 On an installed system, press **e** at the boot menu, add `nomodeset` to the end of the line that starts with `linux`, and press **Ctrl+X**.
 
