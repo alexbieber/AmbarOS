@@ -1,17 +1,164 @@
-/* Ambar brand colours (same as the Plasma theme; AA contrast checked there). */
+/* Ambar look for the docs: the same tokens as the desktop (desktop/share/python/ambar_ui.py).
+   Text/background pairs are WCAG AA; the colours are tested in the desktop. */
+
 :root, [data-md-color-scheme="default"] {
-  --md-primary-fg-color: #B35C05;
-  --md-primary-fg-color--light: #F2A43A;
-  --md-primary-fg-color--dark: #8A4604;
+  --ambar-bg: #F7F4EF;
+  --ambar-surface: #FFFFFF;
+  --ambar-surface2: #F4EFE8;
+  --ambar-border: #E3DACD;
+  --ambar-text: #1F1A15;
+  --ambar-muted: #6F655A;
+  --ambar-accent: #B35C05;
+  --ambar-accent-soft: #FBE9D1;
+  --ambar-shadow: 0 1px 2px rgba(31, 26, 21, .06), 0 12px 32px -12px rgba(31, 26, 21, .18);
+
+  --md-primary-fg-color: #F7F4EF;          /* header: light, like the menu bar */
+  --md-primary-fg-color--light: #FFFFFF;
+  --md-primary-fg-color--dark: #EFE9E0;
+  --md-primary-bg-color: #1F1A15;           /* header text */
+  --md-primary-bg-color--light: #6F655A;
   --md-accent-fg-color: #B35C05;
+  --md-accent-fg-color--transparent: rgba(179, 92, 5, .1);
   --md-typeset-a-color: #A45404;
+  --md-default-bg-color: #F7F4EF;
+  --md-default-fg-color: #1F1A15;
+  --md-default-fg-color--light: #6F655A;
+  --md-code-bg-color: #F4EFE8;
+  --md-footer-bg-color: #EFE9E0;
+  --md-footer-bg-color--dark: #E9E1D5;
+  --md-footer-fg-color: #1F1A15;
+  --md-footer-fg-color--light: #6F655A;
+  --md-footer-fg-color--lighter: #6F655A;
 }
+
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #1A1612;
+  --ambar-bg: #15120F;
+  --ambar-surface: #231E19;
+  --ambar-surface2: #2C261F;
+  --ambar-border: #3B332A;
+  --ambar-text: #F4EEE6;
+  --ambar-muted: #A89D90;
+  --ambar-accent: #F2A43A;
+  --ambar-accent-soft: #3B2B16;
+  --ambar-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -16px rgba(0, 0, 0, .6);
+
+  --md-hue: 30;
+  --md-primary-fg-color: #1C1814;
   --md-primary-fg-color--light: #2A241E;
-  --md-primary-fg-color--dark: #0E0C0A;
+  --md-primary-fg-color--dark: #15120F;
+  --md-primary-bg-color: #F4EEE6;
+  --md-primary-bg-color--light: #A89D90;
   --md-accent-fg-color: #F2A43A;
+  --md-accent-fg-color--transparent: rgba(242, 164, 58, .12);
   --md-typeset-a-color: #F2A43A;
   --md-default-bg-color: #15120F;
+  --md-default-fg-color: #F4EEE6;
+  --md-default-fg-color--light: #A89D90;
+  --md-code-bg-color: #231E19;
+  --md-footer-bg-color: #1C1814;
+  --md-footer-bg-color--dark: #15120F;
 }
-.md-header__button.md-logo img { height: 1.4rem; }
+
+/* Typography: the system's UI font (SF Pro on a Mac, Inter or Noto on Ambar), no web fonts. */
+:root {
+  --md-text-font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+  --md-code-font-family: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+}
+body, input { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+.md-typeset { font-size: .8rem; line-height: 1.65; }
+.md-typeset h1 { font-weight: 700; letter-spacing: -.02em; color: var(--ambar-text); }
+.md-typeset h2 { font-weight: 650; letter-spacing: -.01em; }
+.md-typeset h3 { font-weight: 650; }
+
+/* Header: a calm bar with a hairline, like the desktop's menu bar. */
+.md-header { box-shadow: none; border-bottom: 1px solid var(--ambar-border); }
+.md-header--shadow { box-shadow: 0 1px 12px rgba(0, 0, 0, .06); }
+.md-header__button.md-logo img { height: 1.5rem; }
+.md-header__topic:first-child { font-weight: 700; }
+.md-search__form { border-radius: .6rem; background: var(--ambar-surface2); }
+.md-search__form:hover { background: var(--ambar-border); }
+[data-md-color-scheme="default"] .md-search__input::placeholder,
+[data-md-color-scheme="default"] .md-search__icon { color: var(--ambar-muted); }
+.md-tabs { border-bottom: 1px solid var(--ambar-border); }
+
+/* Navigation */
+.md-nav__item .md-nav__link--active, .md-nav__link:is(:focus, :hover) { color: var(--ambar-accent); }
+.md-nav__title { color: var(--ambar-muted); }
+
+/* Content blocks */
+.md-typeset img { border-radius: 10px; }
+.md-typeset table:not([class]) { border-radius: 12px; border: 1px solid var(--ambar-border); overflow: hidden;
+  font-size: .75rem; box-shadow: none; }
+.md-typeset table:not([class]) th { background: var(--ambar-surface2); font-weight: 650; }
+.md-typeset .admonition, .md-typeset details { border-radius: 12px; border-width: 1px; box-shadow: none; font-size: .75rem; }
+.md-typeset code { border-radius: 6px; }
+.md-typeset pre > code { border-radius: 10px; }
+.md-typeset .md-button { border-radius: 10px; font-weight: 600; padding: .55em 1.3em; border-width: 1px;
+  color: var(--ambar-text); border-color: var(--ambar-border); background: var(--ambar-surface); }
+.md-typeset .md-button:hover { border-color: var(--ambar-accent); color: var(--ambar-accent); background: var(--ambar-surface); }
+.md-typeset .md-button--primary { background: var(--ambar-accent); border-color: var(--ambar-accent);
+  color: #fff; }
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary { color: #1B1209; }
+.md-typeset .md-button--primary:hover { background: var(--ambar-accent); color: #fff; filter: brightness(1.08); }
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary:hover { color: #1B1209; }
+
+/* ------------------------------------------------------------- home page */
+
+.ambar-hero { text-align: center; padding: 2.2rem 0 1.2rem; max-width: 46rem; margin: 0 auto; }
+.ambar-hero__mark { width: 4.5rem; height: auto; border-radius: 0 !important; margin-bottom: .6rem; }
+.md-typeset .ambar-hero__title { font-size: 2.9rem; line-height: 1.05; margin: 0 0 .5rem; letter-spacing: -.035em; }
+.md-typeset .ambar-hero__title .headerlink { display: none; }
+.ambar-hero__tagline { font-size: 1.05rem; font-weight: 600; color: var(--ambar-accent); margin: 0 0 .8rem; }
+.ambar-hero__lead { font-size: 1rem; line-height: 1.6; color: var(--ambar-muted); margin: 0 auto 1.4rem; max-width: 40rem; }
+.ambar-hero__actions { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+.md-typeset .ambar-hero__actions .md-button { margin: 0; }
+.ambar-hero__meta { font-size: .7rem; color: var(--ambar-muted); margin-top: 1rem; }
+
+.md-typeset .ambar-shot { margin: 1.2rem auto 0; }
+.md-typeset .ambar-shot img { border-radius: 14px; border: 1px solid var(--ambar-border); box-shadow: var(--ambar-shadow); }
+.md-typeset .ambar-shot--hero { max-width: 64rem; }
+
+.md-typeset .ambar-note { max-width: 46rem; margin: 1.4rem auto 0; text-align: center; font-size: .72rem;
+  color: var(--ambar-muted); background: var(--ambar-accent-soft); border-radius: 999px; padding: .5rem 1.2rem; }
+
+.md-typeset h2.ambar-section { text-align: center; font-size: 1.6rem; margin: 3.2rem 0 1.4rem; }
+.md-typeset h2.ambar-section .headerlink { display: none; }
+
+.ambar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.ambar-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 52rem; margin: 0 auto; }
+.ambar-card { background: var(--ambar-surface); border: 1px solid var(--ambar-border); border-radius: 14px;
+  padding: 1.1rem 1.2rem .9rem; transition: border-color .15s, transform .15s; }
+.ambar-card:hover { border-color: var(--ambar-accent); transform: translateY(-1px); }
+.md-typeset .ambar-card h3 { margin: 0 0 .5rem; font-size: .95rem; display: flex; align-items: center; gap: .45rem; }
+.md-typeset .ambar-card h3 .twemoji { color: var(--ambar-accent); }
+.md-typeset .ambar-card h3 .headerlink { display: none; }
+.md-typeset .ambar-card p { margin: .4rem 0; font-size: .74rem; color: var(--ambar-muted); line-height: 1.55; }
+.md-typeset .ambar-card p:last-child a { font-weight: 600; }
+.md-typeset .ambar-card--edition code { font-size: .68rem; }
+
+.ambar-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem 1rem; }
+.md-typeset .ambar-gallery figure { margin: 0; max-width: none; }
+.md-typeset .ambar-gallery img { border-radius: 12px; border: 1px solid var(--ambar-border); box-shadow: var(--ambar-shadow);
+  aspect-ratio: 16 / 10.5; object-fit: cover; object-position: top left; width: 100%; }
+.md-typeset .ambar-gallery figcaption { font-size: .7rem; color: var(--ambar-muted); margin-top: .5rem; max-width: none; }
+
+.ambar-video { width: 100%; border-radius: 14px; border: 1px solid var(--ambar-border); box-shadow: var(--ambar-shadow); }
+
+/* Home: let the content use the full width, centred. */
+.md-content:has(.ambar-hero) .md-content__inner { max-width: 68rem; margin: 0 auto; padding-top: 0; }
+.md-content:has(.ambar-hero) .md-content__inner > h1:first-child { display: none; }
+.md-content:has(.ambar-hero) .md-content__button { display: none; }
+.md-content:has(.ambar-hero) table:not([class]) { display: table; width: 100%; max-width: 46rem; margin: 0 auto; }
+
+@media screen and (max-width: 60em) {
+  .ambar-grid, .ambar-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media screen and (max-width: 40em) {
+  .ambar-grid, .ambar-grid--two, .ambar-gallery { grid-template-columns: 1fr; }
+  .md-typeset .ambar-hero__title { font-size: 2.2rem; }
+  .ambar-hero__lead { font-size: .9rem; }
+  .md-typeset .ambar-note { border-radius: 12px; }
+}
+
+/* Command names in tables stay on one line. */
+.md-typeset table:not([class]) code { white-space: nowrap; }
